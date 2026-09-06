@@ -1,0 +1,64 @@
+{
+  "descripcion": "Catálogo de fuentes de referencia. db/seed.sql carga un subconjunto en la tabla `fuentes`; este fichero documenta el resto de opciones y el formato de `config` que espera cada tipo. Añadir una fuente es un INSERT, no un cambio de código.",
+  "tipos": {
+    "amazon_paapi": {
+      "descripcion": "Product Advertising API 5.0. Requiere cuenta de Amazon Partners aprobada con ventas recientes; una cuenta nueva tiene cuota muy baja.",
+      "config": {
+        "keywords": "términos de búsqueda",
+        "searchIndex": "índice de Amazon: All, Electronics, Computers, HomeGarden, Fashion, VideoGames…",
+        "minSavingPercent": "descuento mínimo que devuelve la API (filtro barato: reduce cuota y llamadas a la IA)",
+        "itemCount": "1-10 por petición",
+        "host": "webservices.amazon.es | .de | .it | .fr | .co.uk",
+        "region": "eu-west-1 para los marketplaces europeos",
+        "marketplace": "www.amazon.es"
+      },
+      "limites": "1 petición/s inicial, sube con las ventas generadas. Espacia las fuentes."
+    },
+    "feed_afiliado": {
+      "descripcion": "Datafeed de producto de la red. Es la fuente de mayor calidad: precios estructurados, EAN y enlace ya monetizado.",
+      "config": {
+        "formato": "json | csv",
+        "mapeo": "columna del feed -> campo interno (titulo, precio, url, imagen, ean, marca, categoria, stock)"
+      },
+      "notas": "Los feeds de Awin pesan cientos de MB comprimidos. Limita las columnas en la URL del feed y filtra por categoría en el propio panel de la red."
+    },
+    "rss": {
+      "descripcion": "Blogs y canales de ofertas. El precio se extrae del título o el resumen con expresiones regulares; sin precio detectable, la entrada se descarta.",
+      "config": { "solo_con_precio": true }
+    },
+    "html": {
+      "descripcion": "Páginas de las que se leen los datos estructurados JSON-LD (schema.org/Product). No se parsea el DOM ni se evita ninguna protección.",
+      "config": {},
+      "aviso": "Revisa robots.txt y las condiciones de uso del sitio antes de activar una fuente de este tipo."
+    },
+    "api": {
+      "descripcion": "APIs propias de cada programa (AliExpress Portals, eBay Browse…). Requieren una rama específica en el workflow de ingesta.",
+      "config": { "metodo": "nombre del endpoint", "ship_to_country": "ES" }
+    }
+  },
+  "catalogo_sugerido": [
+    { "nombre": "Amazon PA-API · Informática",   "tipo": "amazon_paapi",  "pais": "ES",  "prioridad": 200, "nota": "El grueso del catálogo con enlace monetizado desde el origen" },
+    { "nombre": "Amazon PA-API · Electrónica",   "tipo": "amazon_paapi",  "pais": "ES",  "prioridad": 200 },
+    { "nombre": "Amazon PA-API · Hogar",         "tipo": "amazon_paapi",  "pais": "ES",  "prioridad": 180 },
+    { "nombre": "Amazon PA-API · Moda",          "tipo": "amazon_paapi",  "pais": "ES",  "prioridad": 190, "nota": "Comisión del 10%: la categoría más rentable de Amazon" },
+    { "nombre": "Amazon DE · envío a España",    "tipo": "amazon_paapi",  "pais": "INT", "prioridad": 140, "nota": "Comparar por coste total; comprobar que el artículo envía a ES" },
+    { "nombre": "Amazon IT · envío a España",    "tipo": "amazon_paapi",  "pais": "INT", "prioridad": 140 },
+    { "nombre": "Awin · Datafeed PcComponentes", "tipo": "feed_afiliado", "pais": "ES",  "prioridad": 150 },
+    { "nombre": "Awin · Datafeed El Corte Inglés","tipo": "feed_afiliado","pais": "ES",  "prioridad": 150 },
+    { "nombre": "Awin · Datafeed Decathlon",     "tipo": "feed_afiliado", "pais": "ES",  "prioridad": 140 },
+    { "nombre": "Tradedoubler · Carrefour",      "tipo": "feed_afiliado", "pais": "ES",  "prioridad": 130 },
+    { "nombre": "Admitad · Worten",              "tipo": "feed_afiliado", "pais": "ES",  "prioridad": 120 },
+    { "nombre": "AliExpress · Hot products",     "tipo": "api",           "pais": "INT", "prioridad": 120, "nota": "Fiabilidad baja por defecto (70): mucho vendedor sin reputación" },
+    { "nombre": "RSS · Ofertas tecnología",      "tipo": "rss",           "pais": "ES",  "prioridad": 90 }
+  ],
+  "recomendaciones": {
+    "orden_de_activacion": [
+      "1. Amazon PA-API: cobertura inmediata y enlace monetizado de origen",
+      "2. Un datafeed de Awin: la mejor calidad de datos estructurados",
+      "3. RSS: complemento barato para detectar campañas puntuales",
+      "4. Tiendas internacionales: solo cuando el cálculo de coste total esté ajustado"
+    ],
+    "prioridad": "Campo `prioridad` de la tabla: ordena la ejecución, no filtra. Útil para que las fuentes buenas entren antes cuando hay tope horario.",
+    "cadencia": "15 minutos es un buen equilibrio. Bajar de 5 minutos agota la cuota de PA-API sin aportar frescura real."
+  }
+}

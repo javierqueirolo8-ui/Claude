@@ -1,0 +1,38 @@
+{
+  "descripcion": "Taxonomía cerrada usada por el clasificador. La IA solo puede devolver uno de estos identificadores; cualquier otro valor se mapea a 'otros'.",
+  "categorias": [
+    { "id": "informatica",       "nombre": "Informática",        "emoji": "💻", "palabras": ["portátil", "laptop", "ssd", "ram", "monitor", "teclado", "ratón", "gpu", "cpu", "nvme", "router"] },
+    { "id": "electronica",       "nombre": "Electrónica",        "emoji": "🔌", "palabras": ["tv", "televisor", "auriculares", "altavoz", "soundbar", "proyector", "cámara"] },
+    { "id": "movil",             "nombre": "Móviles",            "emoji": "📱", "palabras": ["smartphone", "móvil", "iphone", "xiaomi", "samsung galaxy", "tablet", "smartwatch"] },
+    { "id": "videojuegos",       "nombre": "Videojuegos",        "emoji": "🎮", "palabras": ["ps5", "xbox", "nintendo", "switch", "mando", "steam"] },
+    { "id": "hogar",             "nombre": "Hogar",              "emoji": "🏠", "palabras": ["sofá", "colchón", "sartén", "menaje", "aspirador", "sábanas", "silla"] },
+    { "id": "electrodomesticos", "nombre": "Electrodomésticos",  "emoji": "🧊", "palabras": ["lavadora", "frigorífico", "horno", "microondas", "freidora", "cafetera", "lavavajillas"] },
+    { "id": "moda",              "nombre": "Moda",               "emoji": "👕", "palabras": ["zapatillas", "camiseta", "pantalón", "chaqueta", "abrigo", "vestido", "bolso"] },
+    { "id": "deporte",           "nombre": "Deporte",            "emoji": "🏃", "palabras": ["bicicleta", "mancuernas", "running", "fitness", "padel", "trekking"] },
+    { "id": "belleza",           "nombre": "Belleza y salud",    "emoji": "💄", "palabras": ["perfume", "crema", "afeitadora", "cepillo dental", "maquillaje"] },
+    { "id": "alimentacion",      "nombre": "Alimentación",       "emoji": "🛒", "palabras": ["café", "cápsulas", "aceite", "snack", "proteína", "conserva"] },
+    { "id": "juguetes",          "nombre": "Juguetes y bebé",    "emoji": "🧸", "palabras": ["lego", "playmobil", "carrito", "pañales", "puzzle"] },
+    { "id": "jardin",            "nombre": "Jardín y bricolaje", "emoji": "🌿", "palabras": ["taladro", "desbrozadora", "manguera", "barbacoa", "herramienta"] },
+    { "id": "motor",             "nombre": "Motor",              "emoji": "🚗", "palabras": ["neumático", "aceite motor", "batería coche", "cargador ev"] },
+    { "id": "libros",            "nombre": "Libros y cultura",   "emoji": "📚", "palabras": ["libro", "novela", "manga", "kindle"] },
+    { "id": "viajes",            "nombre": "Viajes",             "emoji": "✈️", "palabras": ["hotel", "vuelo", "escapada", "maleta"] },
+    { "id": "servicios",         "nombre": "Servicios y suscripciones", "emoji": "🧾", "palabras": ["suscripción", "vpn", "hosting", "seguro", "tarifa móvil", "fibra"] },
+    { "id": "otros",             "nombre": "Otros",              "emoji": "🎁", "palabras": [] }
+  ],
+  "listas_negras": {
+    "titulo_contiene": [
+      "reacondicionado grado c", "caja abierta dañada", "réplica", "imitación",
+      "curso ganar dinero", "criptomoneda", "casino", "apuestas", "cbd",
+      "seguidores instagram", "adelgazar rápido", "milagro"
+    ],
+    "dominios": ["dhgate.com", "wish.com", "joom.com"]
+  },
+  "umbrales": {
+    "descuento_real_minimo_pct": 15,
+    "score_minimo_publicacion": 60,
+    "muestras_historico_minimas": 3,
+    "precio_minimo_eur": 4,
+    "precio_maximo_eur": 4000,
+    "margen_minimo_historico_pct": 3
+  }
+}

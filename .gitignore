@@ -1,0 +1,18 @@
+# Secretos
+.env
+*.pem
+*.key
+
+# Datos locales
+pgdata/
+*.sql.gz
+*.dump
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Sistema
+.DS_Store
+node_modules/

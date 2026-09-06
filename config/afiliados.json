@@ -1,0 +1,97 @@
+{
+  "descripcion": "Mapa de redes de afiliación. Define cómo se construye el enlace monetizado (deeplink) y con qué parámetro viaja el SubID que permite atribuir cada venta a la oferta y al canal concretos. Los valores {AFF_ID} se resuelven en tiempo de ejecución desde variables de entorno de n8n.",
+  "redes": {
+    "amazon": {
+      "nombre": "Amazon Partners (Programa de Afiliados)",
+      "variable_entorno_id": "AMAZON_ASSOC_TAG",
+      "plantilla": "{URL}?tag={AFF_ID}&linkCode=ll1&ascsubtag={SUBID}",
+      "param_subid": "ascsubtag",
+      "cookie_dias": 1,
+      "comision_pct_rango": [1, 10],
+      "notas": "La comisión depende de la categoría del producto, no del comercio. La cookie dura 24 h (90 días si el usuario añade al carrito). Obligatorio incluir la mención legal del programa en el canal.",
+      "postback": false
+    },
+    "awin": {
+      "nombre": "Awin",
+      "variable_entorno_id": "AWIN_AFF_ID",
+      "plantilla": "https://www.awin1.com/cread.php?awinmid={PROGRAMA}&awinaffid={AFF_ID}&clickref={SUBID}&ued={URL_ENC}",
+      "param_subid": "clickref",
+      "cookie_dias": 30,
+      "comision_pct_rango": [1, 10],
+      "notas": "Cada anunciante tiene su awinmid. Awin ofrece API de transacciones para conciliar ventas reales.",
+      "postback": true,
+      "api_conversiones": "https://api.awin.com/publishers/{AFF_ID}/transactions/"
+    },
+    "tradedoubler": {
+      "nombre": "Tradedoubler",
+      "variable_entorno_id": "TRADEDOUBLER_AFF_ID",
+      "plantilla": "https://clk.tradedoubler.com/click?p={PROGRAMA}&a={AFF_ID}&epi={SUBID}&url={URL_ENC}",
+      "param_subid": "epi",
+      "cookie_dias": 30,
+      "comision_pct_rango": [1, 8],
+      "postback": true
+    },
+    "admitad": {
+      "nombre": "Admitad",
+      "variable_entorno_id": "ADMITAD_AFF_ID",
+      "plantilla": "https://ad.admitad.com/g/{PROGRAMA}/?ulp={URL_ENC}&subid={SUBID}",
+      "param_subid": "subid",
+      "cookie_dias": 30,
+      "comision_pct_rango": [2, 12],
+      "postback": true
+    },
+    "aliexpress": {
+      "nombre": "AliExpress Portals",
+      "variable_entorno_id": "ALIEXPRESS_TRACKING_ID",
+      "plantilla": "{URL}?aff_fcid={SUBID}&aff_platform=portals&aff_trace_key={AFF_ID}",
+      "param_subid": "aff_fcid",
+      "cookie_dias": 30,
+      "comision_pct_rango": [2, 9],
+      "notas": "Mejor usar el endpoint aliexpress.affiliate.link.generate para obtener enlaces firmados en vez de componerlos a mano."
+    },
+    "epn": {
+      "nombre": "eBay Partner Network",
+      "variable_entorno_id": "EPN_CAMPAIGN_ID",
+      "plantilla": "{URL}?mkcid=1&mkrid=1185-53479-19255-0&campid={PROGRAMA}&customid={SUBID}&toolid=10001",
+      "param_subid": "customid",
+      "cookie_dias": 1,
+      "comision_pct_rango": [1, 4]
+    },
+    "impact": {
+      "nombre": "Impact.com",
+      "variable_entorno_id": "IMPACT_AFF_ID",
+      "plantilla": "https://{PROGRAMA}.pxf.io/c/{AFF_ID}/{PROGRAMA}?subId1={SUBID}&u={URL_ENC}",
+      "param_subid": "subId1",
+      "cookie_dias": 30,
+      "comision_pct_rango": [2, 20],
+      "postback": true
+    },
+    "directo": {
+      "nombre": "Programa directo del comercio",
+      "variable_entorno_id": "AFF_ID_DIRECTO",
+      "plantilla": "{URL}?utm_source=chollosbot&utm_medium=telegram&utm_campaign={SUBID}&aff={AFF_ID}",
+      "param_subid": "utm_campaign",
+      "cookie_dias": 30,
+      "comision_pct_rango": [1, 15]
+    }
+  },
+  "subid": {
+    "formato": "o{oferta_id}-c{canal}-{nonce}",
+    "descripcion": "Viaja hasta la red de afiliación y vuelve en el postback de conversión. Permite calcular EPC y % de conversión real por oferta, canal y categoría, y realimentar el scoring.",
+    "ejemplo": "o18422-cgeneral-7f3a1b"
+  },
+  "redireccion": {
+    "ruta_webhook": "/webhook/r/:id",
+    "descripcion": "Todos los enlaces publicados apuntan al redirector propio, no directamente a la red. Así se registra el clic, se puede rotar la red de afiliación sin reeditar mensajes antiguos y se detectan enlaces rotos.",
+    "codigo_http": 302
+  },
+  "cumplimiento": {
+    "aviso_obligatorio": "🔗 Enlaces de afiliado: si compras a través de ellos, el canal recibe una comisión sin coste adicional para ti.",
+    "amazon_texto_requerido": "En calidad de Afiliado de Amazon, obtengo ingresos por las compras adscritas que cumplen los requisitos aplicables.",
+    "referencias": [
+      "Directiva (UE) 2019/2161 (Omnibus) — anuncio de reducciones de precio sobre el precio mínimo de los 30 días previos",
+      "Ley 3/1991 de Competencia Desleal, art. 26 — publicidad encubierta",
+      "Reglamento (UE) 2016/679 (RGPD) — consentimiento para mensajes directos y minimización de datos"
+    ]
+  }
+}

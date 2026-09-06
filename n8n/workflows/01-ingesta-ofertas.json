@@ -1,0 +1,679 @@
+{
+  "name": "ChollosBot 01 · Ingesta multifuente de ofertas",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 1 · Ingesta multifuente\n\nRecolecta ofertas cada 15 min de cuatro tipos de fuente definidos en la tabla `fuentes`:\n\n- **amazon_paapi** → Product Advertising API 5.0 firmada con AWS SigV4 (requiere `NODE_FUNCTION_ALLOW_BUILTIN=crypto`).\n- **feed_afiliado** → datafeeds de Awin / Tradedoubler / Admitad (JSON).\n- **rss** → blogs y canales de ofertas.\n- **html** → páginas con datos estructurados JSON-LD (`schema.org/Product`). Respeta robots.txt y los términos de cada sitio.\n\nTodo desemboca en un esquema común, se deduplica por `hash_dedupe` y se guarda una muestra en `precios_historico`: ese histórico propio es la base de la ventaja frente a Chollometro.",
+        "height": 520,
+        "width": 520,
+        "color": 4
+      },
+      "id": "11fbe6ad-5799-5b6a-9f52-6a37b457c887",
+      "name": "Nota df230ac6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -620,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "ba2db1bc-52d9-5509-8133-3a61b2873d86",
+      "name": "Cada 15 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -40,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, nombre, tipo, url, config, pais, dominio_objetivo\nFROM fuentes\nWHERE activo = TRUE\nORDER BY prioridad DESC;",
+        "options": {}
+      },
+      "id": "ff570d68-218f-5939-9506-402b4b434fbf",
+      "name": "Cargar fuentes activas",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        180,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "13976767-c93d-5c10-b34a-83aa20255970",
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "amazon_paapi",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "amazon"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b5cc0912-6edc-58c8-ab59-baece8d13fc8",
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "feed_afiliado",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "feed"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cf6dc9df-549e-5430-b086-0f6379ff4e5e",
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "rss",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "rss"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c2f5e135-3860-5f32-bdab-39778f8e7db9",
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "html",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "html"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "a6c6934f-4ea9-5f77-a3a5-3f267bc9de95",
+      "name": "Rutar por tipo de fuente",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Firma AWS Signature V4 para Product Advertising API 5.0 (SearchItems).\n// Requiere en n8n:  NODE_FUNCTION_ALLOW_BUILTIN=crypto\nconst crypto = require('crypto');\nconst salida = [];\n\nconst hmac = (clave, txt) => crypto.createHmac('sha256', clave).update(txt, 'utf8').digest();\nconst sha256hex = (txt) => crypto.createHash('sha256').update(txt, 'utf8').digest('hex');\n\nfor (const item of $input.all()) {\n  const f = item.json;\n  const cfg = f.config || {};\n  const host = cfg.host || 'webservices.amazon.es';\n  const region = cfg.region || 'eu-west-1';\n  const servicio = 'ProductAdvertisingAPI';\n  const ruta = '/paapi5/searchitems';\n  const target = 'com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems';\n\n  const cuerpo = JSON.stringify({\n    Keywords: cfg.keywords || 'ofertas',\n    SearchIndex: cfg.searchIndex || 'All',\n    ItemCount: cfg.itemCount || 10,\n    MinSavingPercent: cfg.minSavingPercent || 20,\n    PartnerTag: $env.AMAZON_ASSOC_TAG,\n    PartnerType: 'Associates',\n    Marketplace: cfg.marketplace || 'www.amazon.es',\n    Resources: [\n      'ItemInfo.Title', 'ItemInfo.ByLineInfo', 'ItemInfo.Features',\n      'ItemInfo.ExternalIds', 'ItemInfo.ProductInfo', 'ItemInfo.Classifications',\n      'Images.Primary.Large', 'Offers.Listings.Price', 'Offers.Listings.SavingBasis',\n      'Offers.Listings.Promotions', 'Offers.Listings.Availability.Message',\n      'Offers.Listings.DeliveryInfo.IsFreeShippingEligible',\n      'Offers.Listings.MerchantInfo', 'BrowseNodeInfo.BrowseNodes'\n    ]\n  });\n\n  const amzDate = new Date().toISOString().replace(/[:-]|\\.\\d{3}/g, '');\n  const dia = amzDate.slice(0, 8);\n  const cabeceras = {\n    'content-encoding': 'amz-1.0',\n    'content-type': 'application/json; charset=utf-8',\n    'host': host,\n    'x-amz-date': amzDate,\n    'x-amz-target': target\n  };\n  const claves = Object.keys(cabeceras).sort();\n  const cabecerasFirmadas = claves.join(';');\n  const cabecerasCanonicas = claves.map(k => k + ':' + cabeceras[k] + '\\n').join('');\n  const peticionCanonica = ['POST', ruta, '', cabecerasCanonicas, cabecerasFirmadas,\n                            sha256hex(cuerpo)].join('\\n');\n  const ambito = `${dia}/${region}/${servicio}/aws4_request`;\n  const cadenaAFirmar = ['AWS4-HMAC-SHA256', amzDate, ambito, sha256hex(peticionCanonica)].join('\\n');\n\n  let k = hmac('AWS4' + $env.AMAZON_PAAPI_SECRET, dia);\n  k = hmac(k, region); k = hmac(k, servicio); k = hmac(k, 'aws4_request');\n  const firma = crypto.createHmac('sha256', k).update(cadenaAFirmar, 'utf8').digest('hex');\n\n  cabeceras['Authorization'] = `AWS4-HMAC-SHA256 Credential=${$env.AMAZON_PAAPI_KEY}/${ambito}, ` +\n                               `SignedHeaders=${cabecerasFirmadas}, Signature=${firma}`;\n  delete cabeceras.host; // la pone el cliente HTTP\n\n  salida.push({ json: {\n    fuente: f.nombre, dominio_objetivo: f.dominio_objetivo || 'amazon.es', pais: f.pais,\n    url: `https://${host}${ruta}`, cabeceras, cuerpo\n  }});\n}\nreturn salida;\n"
+      },
+      "id": "8e8cfa20-a5a2-5c77-b81d-1fffb7b9fba4",
+      "name": "Firmar petición PA-API (SigV4)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($json.cabeceras) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.cuerpo }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fbce514c-27d3-54ff-99c1-da018b9a4e70",
+      "name": "Amazon · SearchItems",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        -60
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// --- utilidades compartidas -------------------------------------------------\nconst PARAMS_BASURA = ['tag','utm_source','utm_medium','utm_campaign','utm_term',\n  'utm_content','ascsubtag','ref','ref_','psc','th','linkCode','smid','pd_rd_i',\n  'pd_rd_r','pd_rd_w','pf_rd_p','pf_rd_r','_encoding','gclid','fbclid','clickref',\n  'epi','subid','aff_fcid','aff_platform','aff_trace_key'];\n\nfunction limpiarUrl(u) {\n  try {\n    const url = new URL(u);\n    for (const p of PARAMS_BASURA) url.searchParams.delete(p);\n    url.hash = '';\n    return url.toString().replace(/\\?$/, '');\n  } catch (e) { return u; }\n}\n\nfunction dominioDe(u) {\n  try { return new URL(u).hostname.replace(/^www\\./, '').toLowerCase(); }\n  catch (e) { return null; }\n}\n\nfunction aNumero(v) {\n  if (v === null || v === undefined) return null;\n  if (typeof v === 'number') return isFinite(v) ? v : null;\n  // \"1.299,99 €\" -> 1299.99   |   \"1,299.99\" -> 1299.99\n  let s = String(v).replace(/[^0-9.,-]/g, '').trim();\n  if (!s) return null;\n  const coma = s.lastIndexOf(','), punto = s.lastIndexOf('.');\n  if (coma > punto) s = s.replace(/\\./g, '').replace(',', '.');\n  else s = s.replace(/,/g, '');\n  const n = parseFloat(s);\n  return isFinite(n) ? n : null;\n}\n\nfunction claveProducto(datos) {\n  if (datos.asin) return 'asin:' + datos.asin;\n  if (datos.ean && String(datos.ean).length >= 8) return 'ean:' + datos.ean;\n  const u = limpiarUrl(datos.url_original || '');\n  try {\n    const url = new URL(u);\n    return 'url:' + url.hostname.replace(/^www\\./, '') + url.pathname.replace(/\\/$/, '');\n  } catch (e) { return 'url:' + u; }\n}\n\nconst salida = [];\nfor (const item of $input.all()) {\n  const r = item.json || {};\n  const ctx = $('Firmar petición PA-API (SigV4)').all()[item.pairedItem?.item ?? 0]?.json || {};\n  const articulos = r?.SearchResult?.Items || [];\n  for (const a of articulos) {\n    const listing = a?.Offers?.Listings?.[0];\n    if (!listing) continue;\n    const precio = aNumero(listing?.Price?.Amount);\n    const anterior = aNumero(listing?.SavingBasis?.Amount);\n    if (!precio) continue;\n    salida.push({ json: {\n      fuente: ctx.fuente || 'amazon_paapi',\n      merchant: listing?.MerchantInfo?.Name || 'Amazon',\n      url_original: a.DetailPageURL,\n      titulo: a?.ItemInfo?.Title?.DisplayValue,\n      descripcion: (a?.ItemInfo?.Features?.DisplayValues || []).slice(0, 4).join(' · '),\n      imagen: a?.Images?.Primary?.Large?.URL,\n      marca: a?.ItemInfo?.ByLineInfo?.Brand?.DisplayValue\n             || a?.ItemInfo?.ByLineInfo?.Manufacturer?.DisplayValue,\n      ean: (a?.ItemInfo?.ExternalIds?.EANs?.DisplayValues || [])[0] || null,\n      asin: a.ASIN,\n      categoria_fuente: a?.BrowseNodeInfo?.BrowseNodes?.[0]?.ContextFreeName || null,\n      precio_actual: precio,\n      precio_anterior: anterior,\n      moneda: listing?.Price?.Currency || 'EUR',\n      envio_gratis: !!listing?.DeliveryInfo?.IsFreeShippingEligible,\n      envio_coste: 0,\n      cupon: (listing?.Promotions || []).map(p => p.DisplayName).filter(Boolean).join(' + ') || null,\n      pais: ctx.pais || 'ES',\n      stock: !/no disponible|out of stock/i.test(listing?.Availability?.Message || ''),\n      payload: { origen: 'paapi5', disponibilidad: listing?.Availability?.Message || null }\n    }});\n  }\n}\nreturn salida;\n"
+      },
+      "id": "ce8fbc50-9d4e-597a-a567-584a355f015c",
+      "name": "Normalizar Amazon",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url.replace('{AWIN_FEED_KEY}', $env.AWIN_FEED_KEY || '') }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "3d02bc4e-67d6-586c-a4a3-de5bb2b73091",
+      "name": "Descargar datafeed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        140
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// --- utilidades compartidas -------------------------------------------------\nconst PARAMS_BASURA = ['tag','utm_source','utm_medium','utm_campaign','utm_term',\n  'utm_content','ascsubtag','ref','ref_','psc','th','linkCode','smid','pd_rd_i',\n  'pd_rd_r','pd_rd_w','pf_rd_p','pf_rd_r','_encoding','gclid','fbclid','clickref',\n  'epi','subid','aff_fcid','aff_platform','aff_trace_key'];\n\nfunction limpiarUrl(u) {\n  try {\n    const url = new URL(u);\n    for (const p of PARAMS_BASURA) url.searchParams.delete(p);\n    url.hash = '';\n    return url.toString().replace(/\\?$/, '');\n  } catch (e) { return u; }\n}\n\nfunction dominioDe(u) {\n  try { return new URL(u).hostname.replace(/^www\\./, '').toLowerCase(); }\n  catch (e) { return null; }\n}\n\nfunction aNumero(v) {\n  if (v === null || v === undefined) return null;\n  if (typeof v === 'number') return isFinite(v) ? v : null;\n  // \"1.299,99 €\" -> 1299.99   |   \"1,299.99\" -> 1299.99\n  let s = String(v).replace(/[^0-9.,-]/g, '').trim();\n  if (!s) return null;\n  const coma = s.lastIndexOf(','), punto = s.lastIndexOf('.');\n  if (coma > punto) s = s.replace(/\\./g, '').replace(',', '.');\n  else s = s.replace(/,/g, '');\n  const n = parseFloat(s);\n  return isFinite(n) ? n : null;\n}\n\nfunction claveProducto(datos) {\n  if (datos.asin) return 'asin:' + datos.asin;\n  if (datos.ean && String(datos.ean).length >= 8) return 'ean:' + datos.ean;\n  const u = limpiarUrl(datos.url_original || '');\n  try {\n    const url = new URL(u);\n    return 'url:' + url.hostname.replace(/^www\\./, '') + url.pathname.replace(/\\/$/, '');\n  } catch (e) { return 'url:' + u; }\n}\n\n// Aplica el mapeo declarado en fuentes.config.mapeo sobre el datafeed de la red.\nconst salida = [];\nconst fuentes = $('Cargar fuentes activas').all().map(i => i.json)\n                  .filter(f => f.tipo === 'feed_afiliado');\n\nfor (let idx = 0; idx < $input.all().length; idx++) {\n  const resp = $input.all()[idx].json;\n  const f = fuentes[idx] || fuentes[0] || {};\n  const mapeo = (f.config && f.config.mapeo) || {};\n  let filas = resp.data || resp.products || resp.body || resp;\n  if (!Array.isArray(filas)) filas = filas && Array.isArray(filas.items) ? filas.items : [];\n\n  for (const fila of filas.slice(0, 500)) {\n    const precio = aNumero(fila[mapeo.precio || 'search_price']);\n    const url = fila[mapeo.url || 'aw_deep_link'];\n    if (!precio || !url) continue;\n    salida.push({ json: {\n      fuente: f.nombre || 'feed_afiliado',\n      merchant: f.dominio_objetivo,\n      url_original: url,\n      titulo: fila[mapeo.titulo || 'product_name'],\n      descripcion: (fila[mapeo.descripcion || 'description'] || '').slice(0, 400),\n      imagen: fila[mapeo.imagen || 'merchant_image_url'],\n      marca: fila[mapeo.marca || 'brand_name'] || null,\n      ean: fila[mapeo.ean || 'ean'] || null,\n      asin: null,\n      categoria_fuente: fila[mapeo.categoria || 'merchant_category'] || null,\n      precio_actual: precio,\n      precio_anterior: aNumero(fila[mapeo.precio_anterior || 'store_price']),\n      moneda: 'EUR',\n      envio_gratis: false,\n      envio_coste: aNumero(fila.delivery_cost) || 0,\n      cupon: null,\n      pais: f.pais || 'ES',\n      stock: String(fila[mapeo.stock || 'in_stock'] ?? '1') !== '0',\n      payload: { origen: 'datafeed' }\n    }});\n  }\n}\nreturn salida;\n"
+      },
+      "id": "cc6e531f-818a-5e93-a8df-422a6e885a08",
+      "name": "Normalizar datafeed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "ignoreSSL": false
+        }
+      },
+      "id": "84ac33a4-4650-5f30-8c37-79a752fdfe88",
+      "name": "Leer RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        340
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// --- utilidades compartidas -------------------------------------------------\nconst PARAMS_BASURA = ['tag','utm_source','utm_medium','utm_campaign','utm_term',\n  'utm_content','ascsubtag','ref','ref_','psc','th','linkCode','smid','pd_rd_i',\n  'pd_rd_r','pd_rd_w','pf_rd_p','pf_rd_r','_encoding','gclid','fbclid','clickref',\n  'epi','subid','aff_fcid','aff_platform','aff_trace_key'];\n\nfunction limpiarUrl(u) {\n  try {\n    const url = new URL(u);\n    for (const p of PARAMS_BASURA) url.searchParams.delete(p);\n    url.hash = '';\n    return url.toString().replace(/\\?$/, '');\n  } catch (e) { return u; }\n}\n\nfunction dominioDe(u) {\n  try { return new URL(u).hostname.replace(/^www\\./, '').toLowerCase(); }\n  catch (e) { return null; }\n}\n\nfunction aNumero(v) {\n  if (v === null || v === undefined) return null;\n  if (typeof v === 'number') return isFinite(v) ? v : null;\n  // \"1.299,99 €\" -> 1299.99   |   \"1,299.99\" -> 1299.99\n  let s = String(v).replace(/[^0-9.,-]/g, '').trim();\n  if (!s) return null;\n  const coma = s.lastIndexOf(','), punto = s.lastIndexOf('.');\n  if (coma > punto) s = s.replace(/\\./g, '').replace(',', '.');\n  else s = s.replace(/,/g, '');\n  const n = parseFloat(s);\n  return isFinite(n) ? n : null;\n}\n\nfunction claveProducto(datos) {\n  if (datos.asin) return 'asin:' + datos.asin;\n  if (datos.ean && String(datos.ean).length >= 8) return 'ean:' + datos.ean;\n  const u = limpiarUrl(datos.url_original || '');\n  try {\n    const url = new URL(u);\n    return 'url:' + url.hostname.replace(/^www\\./, '') + url.pathname.replace(/\\/$/, '');\n  } catch (e) { return 'url:' + u; }\n}\n\n// Los feeds de ofertas no traen precio estructurado: se extrae del título/resumen.\nconst salida = [];\nconst rePrecio = /(\\d{1,3}(?:[.\\s]\\d{3})*(?:[.,]\\d{1,2})?)\\s*(?:€|eur|euros)/i;\nconst reAntes  = /(?:antes|pvp|precio recomendado|en vez de)\\D{0,12}(\\d{1,3}(?:[.\\s]\\d{3})*(?:[.,]\\d{1,2})?)/i;\n\nfor (const item of $input.all()) {\n  const e = item.json;\n  const texto = [e.title, e.contentSnippet, e.content].filter(Boolean).join(' ');\n  const m = texto.match(rePrecio);\n  if (!m) continue;                                   // sin precio no es una oferta accionable\n  const precio = aNumero(m[1]);\n  const mAntes = texto.match(reAntes);\n  const enlace = e.link || e.guid;\n  if (!precio || !enlace) continue;\n\n  const img = (e.enclosure && e.enclosure.url)\n    || ((e.content || '').match(/<img[^>]+src=\"([^\"]+)\"/i) || [])[1] || null;\n\n  salida.push({ json: {\n    fuente: 'rss',\n    merchant: dominioDe(enlace),\n    url_original: enlace,\n    titulo: e.title,\n    descripcion: (e.contentSnippet || '').slice(0, 400),\n    imagen: img,\n    marca: null, ean: null, asin: null,\n    categoria_fuente: (e.categories || [])[0] || null,\n    precio_actual: precio,\n    precio_anterior: mAntes ? aNumero(mAntes[1]) : null,\n    moneda: 'EUR',\n    envio_gratis: /envío gratis|envio gratis/i.test(texto),\n    envio_coste: 0,\n    cupon: (texto.match(/c[oó]digo:?\\s*([A-Z0-9]{4,15})/i) || [])[1] || null,\n    pais: 'ES', stock: true,\n    payload: { origen: 'rss', publicado: e.isoDate || e.pubDate || null }\n  }});\n}\nreturn salida;\n"
+      },
+      "id": "819e31d4-c267-54fd-a62f-d3f243f2613c",
+      "name": "Normalizar RSS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ \"User-Agent\": $env.SCRAPER_USER_AGENT || \"ChollosBot/1.0 (+contacto@ejemplo.es)\", \"Accept-Language\": \"es-ES,es;q=0.9\" }) }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "2f66e1eb-a862-54a3-ba3d-7b187f23f4d3",
+      "name": "Descargar página",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        540
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// --- utilidades compartidas -------------------------------------------------\nconst PARAMS_BASURA = ['tag','utm_source','utm_medium','utm_campaign','utm_term',\n  'utm_content','ascsubtag','ref','ref_','psc','th','linkCode','smid','pd_rd_i',\n  'pd_rd_r','pd_rd_w','pf_rd_p','pf_rd_r','_encoding','gclid','fbclid','clickref',\n  'epi','subid','aff_fcid','aff_platform','aff_trace_key'];\n\nfunction limpiarUrl(u) {\n  try {\n    const url = new URL(u);\n    for (const p of PARAMS_BASURA) url.searchParams.delete(p);\n    url.hash = '';\n    return url.toString().replace(/\\?$/, '');\n  } catch (e) { return u; }\n}\n\nfunction dominioDe(u) {\n  try { return new URL(u).hostname.replace(/^www\\./, '').toLowerCase(); }\n  catch (e) { return null; }\n}\n\nfunction aNumero(v) {\n  if (v === null || v === undefined) return null;\n  if (typeof v === 'number') return isFinite(v) ? v : null;\n  // \"1.299,99 €\" -> 1299.99   |   \"1,299.99\" -> 1299.99\n  let s = String(v).replace(/[^0-9.,-]/g, '').trim();\n  if (!s) return null;\n  const coma = s.lastIndexOf(','), punto = s.lastIndexOf('.');\n  if (coma > punto) s = s.replace(/\\./g, '').replace(',', '.');\n  else s = s.replace(/,/g, '');\n  const n = parseFloat(s);\n  return isFinite(n) ? n : null;\n}\n\nfunction claveProducto(datos) {\n  if (datos.asin) return 'asin:' + datos.asin;\n  if (datos.ean && String(datos.ean).length >= 8) return 'ean:' + datos.ean;\n  const u = limpiarUrl(datos.url_original || '');\n  try {\n    const url = new URL(u);\n    return 'url:' + url.hostname.replace(/^www\\./, '') + url.pathname.replace(/\\/$/, '');\n  } catch (e) { return 'url:' + u; }\n}\n\n// Extrae datos estructurados schema.org/Product embebidos en la página.\n// No se parsea el DOM ni se saltan protecciones: si la tienda no publica JSON-LD,\n// esa fuente simplemente no produce ofertas.\nconst salida = [];\nconst fuentes = $('Cargar fuentes activas').all().map(i => i.json).filter(f => f.tipo === 'html');\n\nfor (let idx = 0; idx < $input.all().length; idx++) {\n  const html = $input.all()[idx].json.data || $input.all()[idx].json.body || '';\n  const f = fuentes[idx] || fuentes[0] || {};\n  const bloques = [...String(html).matchAll(\n    /<script[^>]+type=[\"']application\\/ld\\+json[\"'][^>]*>([\\s\\S]*?)<\\/script>/gi)];\n\n  for (const b of bloques) {\n    let datos; try { datos = JSON.parse(b[1].trim()); } catch (e) { continue; }\n    const lista = Array.isArray(datos) ? datos : (datos['@graph'] || [datos]);\n    for (const d of lista) {\n      if (!d || (d['@type'] !== 'Product' && !(Array.isArray(d['@type']) && d['@type'].includes('Product')))) continue;\n      const oferta = Array.isArray(d.offers) ? d.offers[0] : d.offers;\n      const precio = aNumero(oferta?.price ?? oferta?.lowPrice);\n      if (!precio) continue;\n      salida.push({ json: {\n        fuente: f.nombre || 'html',\n        merchant: dominioDe(oferta?.url || f.url),\n        url_original: oferta?.url || d.url || f.url,\n        titulo: d.name,\n        descripcion: (d.description || '').slice(0, 400),\n        imagen: Array.isArray(d.image) ? d.image[0] : d.image,\n        marca: typeof d.brand === 'object' ? d.brand?.name : d.brand,\n        ean: d.gtin13 || d.gtin || d.gtin8 || null,\n        asin: null,\n        categoria_fuente: d.category || null,\n        precio_actual: precio,\n        precio_anterior: aNumero(d.highPrice) || null,\n        moneda: oferta?.priceCurrency || 'EUR',\n        envio_gratis: false, envio_coste: 0, cupon: null,\n        pais: f.pais || 'ES',\n        stock: !/OutOfStock|SoldOut/i.test(oferta?.availability || ''),\n        payload: { origen: 'json-ld' }\n      }});\n    }\n  }\n}\nreturn salida;\n"
+      },
+      "id": "8d184a5e-710a-5ce1-bf90-c1fe29f6c900",
+      "name": "Normalizar JSON-LD",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 4,
+        "options": {}
+      },
+      "id": "3c5a1348-5ad4-56db-8d29-a0a372f6e89c",
+      "name": "Unificar fuentes",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// --- utilidades compartidas -------------------------------------------------\nconst PARAMS_BASURA = ['tag','utm_source','utm_medium','utm_campaign','utm_term',\n  'utm_content','ascsubtag','ref','ref_','psc','th','linkCode','smid','pd_rd_i',\n  'pd_rd_r','pd_rd_w','pf_rd_p','pf_rd_r','_encoding','gclid','fbclid','clickref',\n  'epi','subid','aff_fcid','aff_platform','aff_trace_key'];\n\nfunction limpiarUrl(u) {\n  try {\n    const url = new URL(u);\n    for (const p of PARAMS_BASURA) url.searchParams.delete(p);\n    url.hash = '';\n    return url.toString().replace(/\\?$/, '');\n  } catch (e) { return u; }\n}\n\nfunction dominioDe(u) {\n  try { return new URL(u).hostname.replace(/^www\\./, '').toLowerCase(); }\n  catch (e) { return null; }\n}\n\nfunction aNumero(v) {\n  if (v === null || v === undefined) return null;\n  if (typeof v === 'number') return isFinite(v) ? v : null;\n  // \"1.299,99 €\" -> 1299.99   |   \"1,299.99\" -> 1299.99\n  let s = String(v).replace(/[^0-9.,-]/g, '').trim();\n  if (!s) return null;\n  const coma = s.lastIndexOf(','), punto = s.lastIndexOf('.');\n  if (coma > punto) s = s.replace(/\\./g, '').replace(',', '.');\n  else s = s.replace(/,/g, '');\n  const n = parseFloat(s);\n  return isFinite(n) ? n : null;\n}\n\nfunction claveProducto(datos) {\n  if (datos.asin) return 'asin:' + datos.asin;\n  if (datos.ean && String(datos.ean).length >= 8) return 'ean:' + datos.ean;\n  const u = limpiarUrl(datos.url_original || '');\n  try {\n    const url = new URL(u);\n    return 'url:' + url.hostname.replace(/^www\\./, '') + url.pathname.replace(/\\/$/, '');\n  } catch (e) { return 'url:' + u; }\n}\n\nconst crypto = require('crypto');\n\nconst UMBRALES = { precio_min: 4, precio_max: 4000 };\nconst TITULO_PROHIBIDO = ['réplica','imitación','curso ganar dinero','criptomoneda','casino',\n  'apuestas','seguidores instagram','adelgazar rápido','producto milagro'];\nconst DOMINIOS_PROHIBIDOS = ['dhgate.com','wish.com','joom.com'];\n\nconst vistos = new Set();\nconst salida = [];\n\nfor (const item of $input.all()) {\n  const d = { ...item.json };\n  if (!d.titulo || !d.url_original || !d.precio_actual) continue;\n\n  d.titulo = String(d.titulo).replace(/\\s+/g, ' ').trim().slice(0, 300);\n  d.url_original = limpiarUrl(d.url_original);\n  d.dominio = dominioDe(d.url_original);\n  if (!d.dominio) continue;\n\n  const t = d.titulo.toLowerCase();\n  if (DOMINIOS_PROHIBIDOS.includes(d.dominio)) continue;\n  if (TITULO_PROHIBIDO.some(p => t.includes(p))) continue;\n  if (d.precio_actual < UMBRALES.precio_min || d.precio_actual > UMBRALES.precio_max) continue;\n  if (d.stock === false) continue;\n\n  // PVP declarado incoherente (típico inflado x3): se ignora, no se descarta la oferta\n  if (d.precio_anterior && d.precio_anterior <= d.precio_actual) d.precio_anterior = null;\n  if (d.precio_anterior && d.precio_anterior > d.precio_actual * 5) d.precio_anterior = null;\n\n  d.clave_producto = claveProducto(d);\n  d.hash_dedupe = crypto.createHash('sha256')\n    .update(d.dominio + '|' + d.clave_producto).digest('hex');\n  if (vistos.has(d.hash_dedupe)) continue;   // duplicado dentro del mismo lote\n  vistos.add(d.hash_dedupe);\n\n  d.envio_coste = Number(d.envio_coste || 0);\n  d.envio_gratis = !!d.envio_gratis;\n  d.payload = d.payload || {};\n  d.merchant = d.merchant || d.dominio;\n  salida.push({ json: d });\n}\n\n// Un único item con el lote completo: un solo INSERT atómico en Postgres.\nreturn [{ json: { total: salida.length, lote: salida.map(s => s.json) } }];\n"
+      },
+      "id": "878017d6-edb6-556c-a571-f08f8ee5d34d",
+      "name": "Limpiar, deduplicar y filtrar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "da9e8aa0-0e1a-596c-9c48-90e52ef1917b",
+              "leftValue": "={{ $json.total }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "347bf01b-c91e-51b8-8671-d73bcede07e4",
+      "name": "¿Hay ofertas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH entrada AS (\n    SELECT * FROM jsonb_to_recordset($1::jsonb) AS x(\n        hash_dedupe text, clave_producto text, fuente text, merchant text, dominio text,\n        url_original text, titulo text, descripcion text, imagen text, marca text,\n        ean text, asin text, categoria_fuente text, pais text,\n        precio_actual numeric, precio_anterior numeric, moneda text,\n        envio_coste numeric, envio_gratis boolean, cupon text, payload jsonb)\n), guardadas AS (\n    INSERT INTO ofertas (hash_dedupe, clave_producto, fuente, merchant, dominio, url_original,\n        titulo, descripcion, imagen, marca, ean, asin, categoria_fuente, pais,\n        precio_actual, precio_anterior, moneda, envio_coste, envio_gratis, cupon, payload)\n    SELECT hash_dedupe, clave_producto, fuente, merchant, dominio, url_original, titulo,\n        descripcion, imagen, marca, ean, asin, categoria_fuente, COALESCE(pais,'ES'),\n        precio_actual, precio_anterior, COALESCE(moneda,'EUR'), COALESCE(envio_coste,0),\n        COALESCE(envio_gratis,false), cupon, COALESCE(payload,'{}'::jsonb)\n    FROM entrada\n    ON CONFLICT (hash_dedupe) DO UPDATE SET\n        visto_ultima_vez = now(),\n        precio_actual    = EXCLUDED.precio_actual,\n        precio_anterior  = COALESCE(EXCLUDED.precio_anterior, ofertas.precio_anterior),\n        stock            = TRUE,\n        -- Una bajada >= 3% sobre lo ya tratado reabre la oferta para reevaluarla\n        estado = CASE\n            WHEN ofertas.estado IN ('publicada','descartada','caducada')\n                 AND EXCLUDED.precio_actual < ofertas.precio_actual * 0.97\n            THEN 'nueva' ELSE ofertas.estado END\n    RETURNING id, clave_producto, dominio, precio_actual, estado, (xmax = 0) AS es_nueva\n), historico AS (\n    INSERT INTO precios_historico (clave_producto, dominio, precio, fuente)\n    SELECT clave_producto, dominio, precio_actual, 'ingesta' FROM guardadas\n    ON CONFLICT DO NOTHING\n    RETURNING 1\n)\nSELECT COUNT(*) FILTER (WHERE es_nueva)                    AS altas,\n       COUNT(*) FILTER (WHERE NOT es_nueva)                AS actualizadas,\n       COUNT(*) FILTER (WHERE estado = 'nueva')            AS pendientes_clasificar,\n       (SELECT COUNT(*) FROM historico)                    AS muestras_precio\nFROM guardadas;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json.lote) }}"
+        }
+      },
+      "id": "3e4ca48a-eba6-5c74-bd13-57b3379d1301",
+      "name": "Guardar ofertas e histórico",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2000,
+        220
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE fuentes SET ultima_ejecucion = now(), ultimo_error = NULL\nWHERE activo = TRUE\nRETURNING id, nombre, ultima_ejecucion;",
+        "options": {}
+      },
+      "id": "e5ab0619-90cd-5916-9ff4-3bf53fbdedab",
+      "name": "Marcar fuentes ejecutadas",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2220,
+        220
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "72612965-32a3-5946-a5ff-d86238379a40",
+      "name": "Sin novedades",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Cada 15 minutos": {
+      "main": [
+        [
+          {
+            "node": "Cargar fuentes activas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar fuentes activas": {
+      "main": [
+        [
+          {
+            "node": "Rutar por tipo de fuente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rutar por tipo de fuente": {
+      "main": [
+        [
+          {
+            "node": "Firmar petición PA-API (SigV4)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Descargar datafeed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Leer RSS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Descargar página",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Firmar petición PA-API (SigV4)": {
+      "main": [
+        [
+          {
+            "node": "Amazon · SearchItems",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Amazon · SearchItems": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Amazon",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar datafeed": {
+      "main": [
+        [
+          {
+            "node": "Normalizar datafeed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer RSS": {
+      "main": [
+        [
+          {
+            "node": "Normalizar RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar página": {
+      "main": [
+        [
+          {
+            "node": "Normalizar JSON-LD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Amazon": {
+      "main": [
+        [
+          {
+            "node": "Unificar fuentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar datafeed": {
+      "main": [
+        [
+          {
+            "node": "Unificar fuentes",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Normalizar RSS": {
+      "main": [
+        [
+          {
+            "node": "Unificar fuentes",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Normalizar JSON-LD": {
+      "main": [
+        [
+          {
+            "node": "Unificar fuentes",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Unificar fuentes": {
+      "main": [
+        [
+          {
+            "node": "Limpiar, deduplicar y filtrar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limpiar, deduplicar y filtrar": {
+      "main": [
+        [
+          {
+            "node": "¿Hay ofertas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay ofertas?": {
+      "main": [
+        [
+          {
+            "node": "Guardar ofertas e histórico",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sin novedades",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar ofertas e histórico": {
+      "main": [
+        [
+          {
+            "node": "Marcar fuentes ejecutadas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "chollosbot-es"
+  },
+  "tags": [
+    {
+      "name": "chollosbot"
+    },
+    {
+      "name": "ingesta"
+    }
+  ]
+}

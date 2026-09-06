@@ -1,0 +1,377 @@
+{
+  "name": "ChollosBot 06 · Redirector de clics y postback de ventas",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 6 · Atribución del % de venta\n\n**`GET /webhook/r/:id`** — todos los botones del canal apuntan aquí, nunca directamente a la red de afiliación. Registra el clic, genera un SubID único y redirige (302) al deeplink monetizado. Ventajas: se puede cambiar de red sin reeditar mensajes antiguos, se miden clics reales y se detectan enlaces rotos.\n\n**`POST /webhook/postback/:red`** — endpoint para el postback S2S de Awin / Tradedoubler / Admitad / Impact. Devuelve el SubID emitido en el clic, con lo que cada venta y su comisión quedan atribuidas a una oferta, un canal y una categoría concretos. Eso realimenta el EPC por categoría del informe diario.\n\n🔐 Protege el postback con el token compartido `POSTBACK_TOKEN`.\n🔒 No se almacena IP ni user-agent en claro: solo un hash truncado (RGPD).",
+        "height": 460,
+        "width": 560,
+        "color": 4
+      },
+      "id": "a37dc9b9-a074-5a15-bbca-58cb3797b57c",
+      "name": "Nota d3c884a8",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -660,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "r/:id",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "83f22b78-f047-5d9a-826f-5f93607fd39b",
+      "name": "GET /r/:id",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        120
+      ],
+      "webhookId": "e0998496-c2b9-5cc9-ad04-fa78e0a5368c"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, url_afiliado, url_original, categoria, dominio, red_afiliado,\n       comision_pct, estado, canal_chat_id\nFROM ofertas WHERE id = NULLIF($1, '')::bigint;",
+        "options": {
+          "queryReplacement": "={{ [$json.params.id] }}"
+        }
+      },
+      "id": "7d55a984-0672-568c-87f6-abe9244da8fe",
+      "name": "Cargar destino",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        180,
+        120
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst crypto = require('crypto');\nconst peticion = $('GET /r/:id').first().json;\nconst o = $input.first()?.json || {};\n\n// Sin oferta válida: se manda al canal en vez de a una página de error.\nif (!o.id) {\n  return [{ json: { destino: $env.CANAL_PUBLICO_URL || 'https://t.me/tu_canal_chollos',\n                    oferta_id: null, subid: 'invalido', canal: 'desconocido', huella: null,\n                    referer: null } }];\n}\n\nconst canal = (peticion.query && peticion.query.c) || 'general';\nconst nonce = crypto.randomBytes(3).toString('hex');\nconst subid = `o${o.id}-c${canal}-${nonce}`;\n\n// Se reescribe el SubID del deeplink con el del clic concreto: así la conversión\n// que devuelva la red se puede atribuir a este clic exacto.\nlet destino = o.url_afiliado || o.url_original;\ndestino = destino.replace(/(ascsubtag|clickref|epi|subid|customid|aff_fcid|subId1|utm_campaign)=[^&]*/,\n                          (m) => m.split('=')[0] + '=' + subid);\n\n// Huella anónima para detectar clics duplicados sin guardar datos personales (RGPD).\nconst cabeceras = peticion.headers || {};\nconst huella = crypto.createHash('sha256')\n  .update(String(cabeceras['user-agent'] || '') + '|' +\n          String(cabeceras['x-forwarded-for'] || '').split(',')[0] + '|' +\n          new Date().toISOString().slice(0, 10) + '|' + ($env.HASH_SALT || 'chollosbot'))\n  .digest('hex').slice(0, 32);\n\nreturn [{ json: {\n  destino, oferta_id: o.id, subid, canal, huella,\n  referer: (cabeceras.referer || cabeceras.referrer || null)\n}}];\n"
+      },
+      "id": "101fffe9-8b13-5c4d-94f9-720418e9ba4e",
+      "name": "Construir destino con SubID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO clicks (oferta_id, subid, canal, huella, referer)\nVALUES ($1, $2, $3, $4, $5)\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [$json.oferta_id, $json.subid, $json.canal, $json.huella, $json.referer] }}"
+        }
+      },
+      "id": "6174d28f-afa7-55be-a766-6f5d57da47fd",
+      "name": "Registrar clic",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        620,
+        120
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=Redirigiendo a la oferta…",
+        "options": {
+          "responseCode": 302,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Location",
+                "value": "={{ $('Construir destino con SubID').item.json.destino }}"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              },
+              {
+                "name": "Referrer-Policy",
+                "value": "no-referrer"
+              }
+            ]
+          }
+        }
+      },
+      "id": "82f335af-522d-5102-99b3-cad7f9538e8c",
+      "name": "Redirigir 302",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        840,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "postback/:red",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "db0f8f53-9596-556c-a733-7011c11253f8",
+      "name": "POST /postback/:red",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        520
+      ],
+      "webhookId": "68dc4f7d-8f62-52a1-820b-ef0ad0555c9d"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Cada red nombra los campos a su manera; aquí se unifican.\nconst p = $input.first().json;\nconst cuerpo = { ...(p.body || {}), ...(p.query || {}) };\nconst red = (p.params && p.params.red) || cuerpo.red || 'desconocida';\n\nconst token = cuerpo.token || (p.headers && p.headers['x-postback-token']);\nconst autorizado = !$env.POSTBACK_TOKEN || token === $env.POSTBACK_TOKEN;\n\nconst primero = (...claves) => {\n  for (const k of claves) if (cuerpo[k] !== undefined && cuerpo[k] !== '') return cuerpo[k];\n  return null;\n};\n\nconst subid = primero('clickref','epi','subid','customid','subId1','aff_fcid','ascsubtag','sid');\nconst oferta = subid ? parseInt(String(subid).match(/^o(\\d+)/)?.[1] || '', 10) : null;\nconst venta = parseFloat(primero('saleAmount','amount','order_sum','payout_sum','sale') || 0) || null;\nconst comision = parseFloat(primero('commissionAmount','commission','payout','action_payment') || 0) || null;\n\nreturn [{ json: {\n  autorizado, red,\n  id_externo: String(primero('id','transactionId','order_id','action_id','conversion_id')\n                     || `${red}-${subid}-${Date.now()}`),\n  subid, oferta_id: Number.isFinite(oferta) ? oferta : null,\n  importe_venta: venta, comision,\n  comision_pct: (venta && comision) ? Number((100 * comision / venta).toFixed(2)) : null,\n  estado: String(primero('status','estado') || 'pendiente').toLowerCase()\n    .replace('approved','aprobada').replace('pending','pendiente').replace('declined','rechazada')\n}}];\n"
+      },
+      "id": "c6b5ab34-54db-5047-a5c4-dca5738bf7ab",
+      "name": "Normalizar postback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        180,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "448b46f2-339f-5e19-bfa1-050340f6650f",
+              "leftValue": "={{ $json.autorizado }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "39442235-83a1-5218-8a11-2c0e3177ab1c",
+      "name": "¿Postback autorizado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversiones (red, id_externo, subid, oferta_id, importe_venta,\n                          comision, comision_pct, estado)\nVALUES ($1, $2, $3, NULLIF($4,'')::bigint, $5::numeric, $6::numeric, $7::numeric, $8)\nON CONFLICT (red, id_externo) DO UPDATE\n    SET estado = EXCLUDED.estado,\n        comision = COALESCE(EXCLUDED.comision, conversiones.comision),\n        importe_venta = COALESCE(EXCLUDED.importe_venta, conversiones.importe_venta)\nRETURNING id, oferta_id, comision, estado;",
+        "options": {
+          "queryReplacement": "={{ [$json.red, $json.id_externo, $json.subid, $json.oferta_id, $json.importe_venta, $json.comision, $json.comision_pct, $json.estado] }}"
+        }
+      },
+      "id": "940b621a-8b90-5d22-8b75-3e0a31360f89",
+      "name": "Guardar conversión",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        620,
+        440
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, conversion: $json.id ?? null }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "5355e96b-a1f4-56f5-9322-4f139dbdf00d",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        840,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: \"token no válido\" }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "6b00cc77-1f0c-533b-99b4-bbc654cf56cf",
+      "name": "Responder 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        620,
+        620
+      ]
+    }
+  ],
+  "connections": {
+    "GET /r/:id": {
+      "main": [
+        [
+          {
+            "node": "Cargar destino",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar destino": {
+      "main": [
+        [
+          {
+            "node": "Construir destino con SubID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir destino con SubID": {
+      "main": [
+        [
+          {
+            "node": "Registrar clic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar clic": {
+      "main": [
+        [
+          {
+            "node": "Redirigir 302",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST /postback/:red": {
+      "main": [
+        [
+          {
+            "node": "Normalizar postback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar postback": {
+      "main": [
+        [
+          {
+            "node": "¿Postback autorizado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Postback autorizado?": {
+      "main": [
+        [
+          {
+            "node": "Guardar conversión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar conversión": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "chollosbot-es"
+  },
+  "tags": [
+    {
+      "name": "chollosbot"
+    },
+    {
+      "name": "afiliacion"
+    },
+    {
+      "name": "atribucion"
+    }
+  ]
+}

@@ -1,0 +1,455 @@
+{
+  "name": "ChollosBot 03 · Publicación automática y alertas",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 3 · Difusión automática\n\nPublica en el canal correspondiente y, en paralelo, avisa por privado a quienes tengan una alerta que encaje.\n\n**Control de ruido** (otra diferencia frente a un muro comunitario):\n- máximo configurable de publicaciones por hora,\n- máximo 2 ofertas por categoría en cada ronda,\n- ningún comercio se repite en 20 minutos,\n- espera entre envíos para no chocar con los límites de la Bot API.\n\nCada mensaje incluye ficha de precio verificado, aviso de afiliación y botones de compra, histórico y alerta de bajada.",
+        "height": 460,
+        "width": 520,
+        "color": 5
+      },
+      "id": "2468a1b3-b493-5a45-a236-31451aac862d",
+      "name": "Nota 031ba557",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "c3c829f7-e523-5eb8-8bd5-4adb089c7502",
+      "name": "Cada 10 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -60,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT nombre, chat_id, categorias, score_minimo, max_por_hora\nFROM canales WHERE activo = TRUE ORDER BY array_length(categorias, 1) DESC NULLS LAST;",
+        "options": {}
+      },
+      "id": "d120489a-2435-51cb-9485-b64759298c27",
+      "name": "Cargar canales",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        160,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Un único item con la configuración de canales: evita multiplicar las consultas siguientes.\nconst canales = $input.all().map(i => i.json);\nreturn [{ json: {\n  canales,\n  general: canales.find(c => !c.categorias || c.categorias.length === 0) || canales[0] || null,\n  admin: canales.find(c => (c.nombre || '').toLowerCase() === 'admin') || null\n}}];\n"
+      },
+      "id": "766862b5-db87-543a-b03b-410ad084a19c",
+      "name": "Agrupar canales",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH cupo AS (\n    SELECT COUNT(*) AS publicadas_ultima_hora\n    FROM ofertas\n    WHERE estado = 'publicada' AND publicada_en > now() - interval '1 hour'\n), ordenadas AS (\n    SELECT o.*,\n           ROW_NUMBER() OVER (PARTITION BY o.categoria ORDER BY o.score DESC) AS rn\n    FROM ofertas o\n    WHERE o.estado = 'clasificada'\n      AND o.score >= COALESCE(NULLIF(current_setting('chollosbot.score_min', true), '')::int, 60)\n      AND o.stock = TRUE\n      AND (o.caduca_en IS NULL OR o.caduca_en > now())\n      AND o.url_afiliado IS NOT NULL\n)\nSELECT o.id, o.titulo, o.titulo_limpio, o.descripcion, o.imagen, o.marca, o.categoria,\n       o.subcategoria, o.hashtags, o.merchant, o.dominio, o.url_afiliado, o.url_corta,\n       o.precio_actual, o.precio_total, o.precio_anterior, o.precio_referencia,\n       o.precio_min_historico, o.precio_min_30d, o.envio_gratis, o.envio_coste, o.cupon,\n       o.descuento_pct, o.descuento_real_pct, o.es_minimo_historico, o.pvp_inflado,\n       o.score, o.veredicto_ia, o.riesgos, o.comision_pct, o.comision_estimada, o.moneda\nFROM ordenadas o, cupo\nWHERE o.rn <= 2\n  AND cupo.publicadas_ultima_hora < COALESCE(NULLIF(current_setting('chollosbot.max_hora', true), '')::int, 12)\n  AND NOT EXISTS (\n      SELECT 1 FROM ofertas o2\n      WHERE o2.dominio = o.dominio AND o2.estado = 'publicada'\n        AND o2.publicada_en > now() - interval '20 minutes')\nORDER BY o.score DESC\nLIMIT LEAST(5, GREATEST(0, 12 - (SELECT publicadas_ultima_hora FROM cupo)));",
+        "options": {}
+      },
+      "id": "f660d83f-8672-5312-bae2-642e0780ffc0",
+      "name": "Seleccionar ofertas a publicar",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        600,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cfg = $('Agrupar canales').first().json;\nconst EMOJI = { informatica:'💻', electronica:'🔌', movil:'📱', videojuegos:'🎮', hogar:'🏠',\n  electrodomesticos:'🧊', moda:'👕', deporte:'🏃', belleza:'💄', alimentacion:'🛒',\n  juguetes:'🧸', jardin:'🌿', motor:'🚗', libros:'📚', viajes:'✈️', servicios:'🧾', otros:'🎁' };\n\nconst esc = (s) => String(s ?? '')\n  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst eur = (v) => v === null || v === undefined ? '—'\n  : Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';\n\nconst salida = [];\nfor (const item of $input.all()) {\n  const o = item.json;\n\n  // Canal temático si existe; si no, el general.\n  const canal = cfg.canales.find(c => (c.categorias || []).includes(o.categoria)\n                                      && o.score >= c.score_minimo)\n             || cfg.general;\n  if (!canal) continue;\n\n  const emoji = EMOJI[o.categoria] || '🎁';\n  const lineas = [];\n\n  const insignias = [];\n  if (o.es_minimo_historico) insignias.push('🏆 <b>MÍNIMO HISTÓRICO</b>');\n  if (o.score >= 85) insignias.push('🔥 <b>CHOLLO TOP</b>');\n  if (o.pvp_inflado) insignias.push('⚠️ <i>PVP de tienda inflado: descuento real calculado sobre histórico</i>');\n  if (insignias.length) lineas.push(insignias.join('  '));\n\n  lineas.push(`${emoji} <b>${esc(o.titulo_limpio || o.titulo)}</b>`);\n  lineas.push('');\n  lineas.push(`💶 <b>${eur(o.precio_actual)}</b>` +\n    (o.descuento_real_pct ? `  <s>${eur(o.precio_referencia)}</s>  <b>−${Math.round(o.descuento_real_pct)}%</b>` : ''));\n\n  const detalles = [];\n  if (o.envio_gratis) detalles.push('📦 Envío gratis');\n  else if (Number(o.envio_coste) > 0) detalles.push(`📦 +${eur(o.envio_coste)} envío`);\n  if (o.cupon) detalles.push(`🏷 Cupón <code>${esc(o.cupon)}</code>`);\n  if (o.precio_total && Number(o.precio_total) !== Number(o.precio_actual))\n    detalles.push(`🧮 Total real ${eur(o.precio_total)}`);\n  if (detalles.length) lineas.push(detalles.join('   '));\n\n  // Ficha de precio verificado: lo que un muro de votos no puede ofrecer\n  const ficha = [];\n  if (o.precio_min_historico) ficha.push(`mínimo 90d ${eur(o.precio_min_historico)}`);\n  if (o.precio_min_30d) ficha.push(`mínimo 30d ${eur(o.precio_min_30d)}`);\n  if (o.precio_referencia) ficha.push(`precio habitual ${eur(o.precio_referencia)}`);\n  if (ficha.length) lineas.push(`📊 <i>${ficha.join(' · ')}</i>`);\n\n  if (o.descripcion) { lineas.push(''); lineas.push(esc(String(o.descripcion).slice(0, 240))); }\n\n  if (o.riesgos && o.riesgos.length) {\n    lineas.push('');\n    lineas.push('⚠️ <i>A tener en cuenta: ' + esc(o.riesgos.join(', ')) + '</i>');\n  }\n\n  lineas.push('');\n  lineas.push(`🏬 ${esc(o.merchant || o.dominio)}   ·   ⭐ Índice de chollo ${o.score}/100`);\n  const tags = (o.hashtags || []).map(h => '#' + String(h).replace(/[^\\p{L}\\p{N}_]/gu, '')).join(' ');\n  if (tags) lineas.push(tags);\n  lineas.push('');\n  lineas.push('<i>🔗 Enlace de afiliado: si compras, el canal cobra una comisión sin coste extra para ti.</i>');\n\n  const teclado = { inline_keyboard: [\n    [{ text: `🛒 Ver oferta · ${eur(o.precio_actual)}`, url: o.url_corta }],\n    [{ text: '📉 Histórico de precio', callback_data: `hist:${o.id}` },\n     { text: '🔔 Avísame si baja',     callback_data: `alerta:${o.id}` }]\n  ]};\n\n  salida.push({ json: {\n    ...o,\n    chat_id: canal.chat_id,\n    canal_nombre: canal.nombre,\n    mensaje: lineas.join('\\n').slice(0, 1024),\n    teclado\n  }});\n}\nreturn salida;\n"
+      },
+      "id": "5b66cb89-82d4-5875-b8ad-ddf02f37a6b9",
+      "name": "Componer mensaje de Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "d4762c97-bd77-5a44-8bd2-968afe47d3c6",
+      "name": "Recorrer ofertas",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1040,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendPhoto",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, photo: $json.imagen || 'https://dummyimage.com/900x600/1f2937/ffffff&text=Oferta', caption: $json.mensaje, parse_mode: 'HTML', reply_markup: $json.teclado }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "69a897d7-794d-513c-9ef4-efa09b974881",
+      "name": "Publicar en el canal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        380
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH marcada AS (\n    UPDATE ofertas SET estado = 'publicada', publicada_en = now(),\n        canal_chat_id = $2, telegram_message_id = $3\n    WHERE id = $1\n    RETURNING id, titulo_limpio, categoria, precio_actual, url_corta, comision_estimada\n), registro AS (\n    INSERT INTO publicaciones (oferta_id, canal_chat_id, message_id, tipo)\n    SELECT id, $2, $3, 'canal' FROM marcada\n    RETURNING oferta_id\n)\nSELECT m.*, $4::text AS chat_id FROM marcada m;",
+        "options": {
+          "queryReplacement": "={{ [ $('Recorrer ofertas').item.json.id, $('Recorrer ofertas').item.json.chat_id, ($json.result && $json.result.message_id) || null, $('Recorrer ofertas').item.json.chat_id ] }}"
+        }
+      },
+      "id": "fd1bbd2c-84b4-5ed1-b464-00a2624f1740",
+      "name": "Marcar como publicada",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1520,
+        380
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "id": "394f4439-cb5f-51da-aca2-b255abf1d830",
+      "name": "Esperar 3 s (anti-flood)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1740,
+        300
+      ],
+      "webhookId": "b26430b6-32b7-5ce0-867c-c196dc963622"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT a.id            AS alerta_id,\n       s.chat_id,\n       s.telegram_user_id,\n       a.texto,\n       a.precio_max\nFROM alertas a\nJOIN suscriptores s ON s.id = a.suscriptor_id\nWHERE a.activa AND s.activo\n  AND (\n        (a.texto IS NOT NULL AND unaccent(lower($2)) LIKE '%' || unaccent(lower(a.texto)) || '%')\n     OR (a.categoria IS NOT NULL AND a.categoria = $3)\n      )\n  AND $4::numeric <= COALESCE(a.precio_max, 999999)\n  AND COALESCE(a.descuento_min, 0) <= COALESCE($5::numeric, 0)\n  AND NOT EXISTS (SELECT 1 FROM envios_alerta e\n                  WHERE e.alerta_id = a.id AND e.oferta_id = $1)\nLIMIT 200;",
+        "options": {
+          "queryReplacement": "={{ [ $('Recorrer ofertas').item.json.id, $('Recorrer ofertas').item.json.titulo, $('Recorrer ofertas').item.json.categoria, $('Recorrer ofertas').item.json.precio_actual, $('Recorrer ofertas').item.json.descuento_real_pct ] }}"
+        }
+      },
+      "id": "948bf545-ece2-5726-b325-be5514d985df",
+      "name": "Buscar alertas coincidentes",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1520,
+        560
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      },
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst o = $('Recorrer ofertas').first().json;\nconst eur = (v) => Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €';\nconst salida = [];\n\nfor (const item of $input.all()) {\n  const a = item.json;\n  if (!a.chat_id) continue;\n  const motivo = a.texto ? `tu alerta «${a.texto}»` : 'una categoría que sigues';\n  salida.push({ json: {\n    alerta_id: a.alerta_id,\n    oferta_id: o.id,\n    cuerpo: {\n      chat_id: a.chat_id,\n      text: `🔔 Coincide con ${motivo}\\n\\n<b>${o.titulo_limpio || o.titulo}</b>\\n` +\n            `💶 <b>${eur(o.precio_actual)}</b>` +\n            (o.descuento_real_pct ? ` (−${Math.round(o.descuento_real_pct)}% real)` : '') +\n            `\\n🏬 ${o.merchant || o.dominio}\\n\\n` +\n            `<i>🔗 Enlace de afiliado.</i>`,\n      parse_mode: 'HTML',\n      reply_markup: { inline_keyboard: [[{ text: '🛒 Ver oferta', url: o.url_corta }]] }\n    }\n  }});\n}\nreturn salida;\n"
+      },
+      "id": "640617a1-4b01-5ebb-973a-9ddda873b54a",
+      "name": "Preparar avisos privados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.cuerpo) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "4d091ee9-8b29-599c-8af3-5f4951f2aa2b",
+      "name": "Enviar aviso privado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1960,
+        560
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO envios_alerta (alerta_id, oferta_id) VALUES ($1, $2)\nON CONFLICT DO NOTHING RETURNING alerta_id;",
+        "options": {
+          "queryReplacement": "={{ [ $('Preparar avisos privados').item.json.alerta_id, $('Preparar avisos privados').item.json.oferta_id ] }}"
+        }
+      },
+      "id": "4a7a6382-8952-5103-820b-ba20a9090301",
+      "name": "Registrar envío de alerta",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2180,
+        560
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "id": "1d2f8493-4947-5340-b6eb-16ed264205f8",
+      "name": "Ronda completada",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        180
+      ]
+    }
+  ],
+  "connections": {
+    "Cada 10 minutos": {
+      "main": [
+        [
+          {
+            "node": "Cargar canales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar canales": {
+      "main": [
+        [
+          {
+            "node": "Agrupar canales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agrupar canales": {
+      "main": [
+        [
+          {
+            "node": "Seleccionar ofertas a publicar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seleccionar ofertas a publicar": {
+      "main": [
+        [
+          {
+            "node": "Componer mensaje de Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Componer mensaje de Telegram": {
+      "main": [
+        [
+          {
+            "node": "Recorrer ofertas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recorrer ofertas": {
+      "main": [
+        [
+          {
+            "node": "Ronda completada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Publicar en el canal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publicar en el canal": {
+      "main": [
+        [
+          {
+            "node": "Marcar como publicada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar como publicada": {
+      "main": [
+        [
+          {
+            "node": "Esperar 3 s (anti-flood)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Buscar alertas coincidentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar 3 s (anti-flood)": {
+      "main": [
+        [
+          {
+            "node": "Recorrer ofertas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar alertas coincidentes": {
+      "main": [
+        [
+          {
+            "node": "Preparar avisos privados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar avisos privados": {
+      "main": [
+        [
+          {
+            "node": "Enviar aviso privado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar aviso privado": {
+      "main": [
+        [
+          {
+            "node": "Registrar envío de alerta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "chollosbot-es"
+  },
+  "tags": [
+    {
+      "name": "chollosbot"
+    },
+    {
+      "name": "telegram"
+    },
+    {
+      "name": "difusion"
+    }
+  ]
+}

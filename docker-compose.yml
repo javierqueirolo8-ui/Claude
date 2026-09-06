@@ -1,0 +1,101 @@
+version: "3.8"
+
+# ============================================================================
+#  ChollosBot ES · pila completa
+#  docker compose up -d
+#  n8n queda en http://localhost:5678
+# ============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: chollos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chollos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: ${POSTGRES_DB:-chollos}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Se ejecutan una única vez, al crear el volumen
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chollos} -d ${POSTGRES_DB:-chollos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Sin puertos publicados: solo accesible desde la red interna de compose.
+    # Descomenta para inspeccionar con psql desde el anfitrión:
+    # ports: ["5432:5432"]
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: chollos-n8n
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5678:5678"
+    environment:
+      # --- persistencia de n8n ---------------------------------------------
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-chollos}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-chollos}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_POSTGRESDB_SCHEMA: n8n           # separado de las tablas del bot
+
+      # --- URL pública: la usan el redirector /r/:id y el webhook del bot ----
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      WEBHOOK_URL: ${PUBLIC_BASE_URL:-http://localhost:5678}
+      N8N_EDITOR_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:5678}
+
+      # --- seguridad --------------------------------------------------------
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?define N8N_ENCRYPTION_KEY en .env}
+      N8N_SECURE_COOKIE: ${N8N_SECURE_COOKIE:-false}
+      N8N_RUNNERS_ENABLED: "true"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"   # los workflows leen $env (tokens, IDs de afiliado)
+
+      # --- imprescindible: la firma SigV4 de Amazon PA-API usa crypto -------
+      NODE_FUNCTION_ALLOW_BUILTIN: crypto
+      NODE_FUNCTION_ALLOW_EXTERNAL: ""
+
+      GENERIC_TIMEZONE: Europe/Madrid
+      TZ: Europe/Madrid
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: 168            # 7 días de histórico de ejecuciones
+      N8N_LOG_LEVEL: ${N8N_LOG_LEVEL:-info}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+
+      # --- variables de negocio que leen los nodos --------------------------
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ADMIN: ${TELEGRAM_CHAT_ADMIN}
+      CANAL_PUBLICO_URL: ${CANAL_PUBLICO_URL}
+      MODELO_IA: ${MODELO_IA:-claude-sonnet-5}
+      HASH_SALT: ${HASH_SALT}
+      POSTBACK_TOKEN: ${POSTBACK_TOKEN}
+      SCRAPER_USER_AGENT: ${SCRAPER_USER_AGENT}
+      # identificadores de afiliación
+      AMAZON_ASSOC_TAG: ${AMAZON_ASSOC_TAG}
+      AMAZON_PAAPI_KEY: ${AMAZON_PAAPI_KEY}
+      AMAZON_PAAPI_SECRET: ${AMAZON_PAAPI_SECRET}
+      AWIN_AFF_ID: ${AWIN_AFF_ID}
+      AWIN_FEED_KEY: ${AWIN_FEED_KEY}
+      TRADEDOUBLER_AFF_ID: ${TRADEDOUBLER_AFF_ID}
+      ADMITAD_AFF_ID: ${ADMITAD_AFF_ID}
+      ALIEXPRESS_TRACKING_ID: ${ALIEXPRESS_TRACKING_ID}
+      EPN_CAMPAIGN_ID: ${EPN_CAMPAIGN_ID}
+      IMPACT_AFF_ID: ${IMPACT_AFF_ID}
+      AFF_ID_DIRECTO: ${AFF_ID_DIRECTO}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+
+volumes:
+  postgres_data:
+  n8n_data:

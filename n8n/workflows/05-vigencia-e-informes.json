@@ -1,0 +1,464 @@
+{
+  "name": "ChollosBot 05 · Vigencia de ofertas e informe diario",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 5 · Vigencia e informe\n\n**Cada hora**: revisa las ofertas publicadas en las últimas 96 h. Si el precio ha subido o el producto está agotado, edita el mensaje ya publicado para marcarlo como caducado. Un canal donde la mitad de los enlaces están muertos pierde la confianza del usuario.\n\n**Cada día a las 08:00**: informe al canal de administración con captación, publicaciones, clics, ventas conciliadas, comisión y EPC por categoría.",
+        "height": 340,
+        "width": 520,
+        "color": 2
+      },
+      "id": "1af80d4b-9be9-5fbc-8595-02975453b069",
+      "name": "Nota cadd1ba0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "c7af65aa-831e-5796-8832-e1be5caa439a",
+      "name": "Cada hora",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -40,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, url_original, clave_producto, dominio, precio_actual, canal_chat_id,\n       telegram_message_id, COALESCE(titulo_limpio, titulo) AS titulo, url_corta\nFROM ofertas\nWHERE estado = 'publicada'\n  AND publicada_en > now() - interval '96 hours'\n  AND (verificada_en IS NULL OR verificada_en < now() - interval '2 hours')\nORDER BY publicada_en DESC\nLIMIT 25;",
+        "options": {}
+      },
+      "id": "ddee5e42-24dd-57ba-8dd7-dae96a04832c",
+      "name": "Publicadas a revisar",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        180,
+        160
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url_original }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ \"User-Agent\": $env.SCRAPER_USER_AGENT || \"ChollosBot/1.0 (+contacto@ejemplo.es)\", \"Accept-Language\": \"es-ES,es;q=0.9\" }) }}",
+        "options": {
+          "timeout": 25000,
+          "batching": {
+            "batch": {
+              "batchSize": 3,
+              "batchInterval": 2000
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "975e0fa3-f216-52e6-9dbd-fbb444d08ae5",
+      "name": "Releer ficha de producto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        160
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst previas = $('Publicadas a revisar').all().map(i => i.json);\nconst salida = [];\n\nconst num = (v) => {\n  if (v == null) return null;\n  let s = String(v).replace(/[^0-9.,-]/g, '');\n  const coma = s.lastIndexOf(','), punto = s.lastIndexOf('.');\n  if (coma > punto) s = s.replace(/\\./g, '').replace(',', '.'); else s = s.replace(/,/g, '');\n  const nn = parseFloat(s); return isFinite(nn) ? nn : null;\n};\n\nconst entradas = $input.all();\nfor (let i = 0; i < entradas.length; i++) {\n  const o = previas[i]; if (!o) continue;\n  const html = String(entradas[i].json?.data || entradas[i].json?.body || '');\n\n  let precio = null, agotado = false;\n  for (const b of html.matchAll(/<script[^>]+application\\/ld\\+json[^>]*>([\\s\\S]*?)<\\/script>/gi)) {\n    try {\n      const d = JSON.parse(b[1].trim());\n      const lista = Array.isArray(d) ? d : (d['@graph'] || [d]);\n      for (const p of lista) {\n        const of = Array.isArray(p?.offers) ? p.offers[0] : p?.offers;\n        if (of?.price != null) { precio = num(of.price); agotado = /OutOfStock|SoldOut/i.test(of.availability || ''); }\n      }\n    } catch (e) { /* ficha sin JSON-LD válido */ }\n  }\n\n  const sinDatos = precio === null && !html;\n  const subida = precio !== null && precio > Number(o.precio_actual) * 1.05;\n  const caducada = agotado || subida;\n\n  salida.push({ json: {\n    ...o,\n    precio_nuevo: precio,\n    agotado,\n    caducada,\n    motivo: agotado ? 'agotado' : (subida ? 'subida_de_precio' : null),\n    verificable: !sinDatos,\n    // Solo se edita el mensaje si hay certeza: sin datos, se deja como está\n    editar: caducada && !!o.telegram_message_id\n  }});\n}\nreturn salida;\n"
+      },
+      "id": "93ad29c2-487f-5958-8d79-1ce324fb7567",
+      "name": "Comparar precio actual",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a47654b5-8b32-5139-9b56-d00b1693ba03",
+              "leftValue": "={{ $json.editar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "92b16244-8fe7-517e-b5e4-7057b7a81200",
+      "name": "¿Ha caducado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        840,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/editMessageCaption",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.canal_chat_id, message_id: $json.telegram_message_id, caption: '⛔️ <b>OFERTA CADUCADA</b>  (' + ($json.motivo === 'agotado' ? 'sin stock' : 'ha subido de precio' + ($json.precio_nuevo ? ' a ' + $json.precio_nuevo + ' €' : '')) + ')\\n\\n<s>' + $json.titulo + '</s>\\n\\n<i>Verificado automáticamente el ' + new Date().toLocaleString('es-ES') + '</i>', parse_mode: 'HTML' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "99f25faf-3623-5f21-979c-b51329598e5c",
+      "name": "Marcar caducada en el canal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1060,
+        60
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE ofertas SET\n    estado = CASE WHEN $2::boolean THEN 'caducada' ELSE estado END,\n    stock  = NOT $3::boolean,\n    precio_actual = COALESCE($4::numeric, precio_actual),\n    verificada_en = now()\nWHERE id = $1\nRETURNING id, estado, precio_actual;",
+        "options": {
+          "queryReplacement": "={{ [$json.id, $json.caducada, $json.agotado, $json.precio_nuevo] }}"
+        }
+      },
+      "id": "7148f905-2c49-5826-93f5-cc3b6547cfc0",
+      "name": "Actualizar estado",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1280,
+        160
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO precios_historico (clave_producto, dominio, precio, fuente)\nSELECT clave_producto, dominio, $2::numeric, 'verificacion'\nFROM ofertas WHERE id = $1 AND $2::numeric IS NOT NULL\nON CONFLICT DO NOTHING RETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [$json.id, $('Comparar precio actual').item.json.precio_nuevo] }}"
+        }
+      },
+      "id": "6feca5c7-6b14-590d-9015-1cd06a69a8c4",
+      "name": "Guardar precio revisado",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1500,
+        160
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "ace807fe-2d52-548c-b3ad-de13442e8192",
+      "name": "Cada día a las 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -40,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT COUNT(*) FROM ofertas WHERE creada_en > now() - interval '24 hours')            AS captadas,\n  (SELECT COUNT(*) FROM ofertas WHERE publicada_en > now() - interval '24 hours')         AS publicadas,\n  (SELECT COUNT(*) FROM ofertas WHERE estado = 'descartada'\n                                  AND actualizada_en > now() - interval '24 hours')       AS descartadas,\n  (SELECT COUNT(*) FROM ofertas WHERE estado = 'caducada'\n                                  AND actualizada_en > now() - interval '24 hours')       AS caducadas,\n  (SELECT COUNT(*) FROM clicks WHERE creado_en > now() - interval '24 hours')             AS clics,\n  (SELECT COUNT(*) FROM conversiones WHERE fecha > now() - interval '24 hours')           AS ventas,\n  (SELECT COALESCE(SUM(comision),0) FROM conversiones\n     WHERE fecha > now() - interval '24 hours' AND estado <> 'rechazada')                 AS comision,\n  (SELECT COALESCE(SUM(comision_estimada),0) FROM ofertas\n     WHERE publicada_en > now() - interval '24 hours')                                    AS comision_potencial,\n  (SELECT COUNT(*) FROM suscriptores WHERE activo)                                        AS suscriptores,\n  (SELECT COUNT(*) FROM suscriptores WHERE creado_en > now() - interval '24 hours')       AS altas,\n  (SELECT COUNT(*) FROM alertas WHERE activa)                                             AS alertas_activas,\n  (SELECT COUNT(*) FROM ofertas WHERE pvp_inflado AND creada_en > now() - interval '24 hours') AS pvp_inflados,\n  -- Clics y comisión se agregan por separado antes de unirse: un JOIN directo\n  -- entre clicks y conversiones multiplicaría filas e inflaría el EPC.\n  (SELECT json_agg(x) FROM (\n      SELECT o.categoria,\n             COUNT(*)                                    AS ofertas,\n             COALESCE(SUM(c.clics), 0)                   AS clics,\n             ROUND(COALESCE(SUM(v.comision), 0)\n                   / NULLIF(SUM(c.clics), 0), 3)         AS epc\n      FROM ofertas o\n      LEFT JOIN (SELECT oferta_id, COUNT(*) AS clics FROM clicks\n                 WHERE creado_en > now() - interval '7 days' GROUP BY oferta_id) c\n             ON c.oferta_id = o.id\n      LEFT JOIN (SELECT oferta_id, SUM(comision) AS comision FROM conversiones\n                 WHERE estado <> 'rechazada' GROUP BY oferta_id) v\n             ON v.oferta_id = o.id\n      WHERE o.publicada_en > now() - interval '7 days'\n      GROUP BY o.categoria ORDER BY clics DESC NULLS LAST LIMIT 8) x)                     AS por_categoria,\n  (SELECT chat_id FROM canales WHERE lower(nombre) = 'admin' AND activo LIMIT 1)          AS chat_admin;",
+        "options": {}
+      },
+      "id": "33ebacc0-d3ff-5222-a084-667d0cef5a09",
+      "name": "Métricas del día",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        180,
+        620
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst m = $input.first().json;\nconst eur = v => Number(v || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €';\nconst pct = (a, b) => b ? (100 * a / b).toFixed(1) + '%' : '—';\n\nconst cat = (m.por_categoria || []).map(c =>\n  `  · ${c.categoria || 'sin categoría'}: ${c.clics || 0} clics · EPC ${c.epc ?? '—'}`).join('\\n');\n\nconst texto = [\n  '📊 <b>Informe ChollosBot · últimas 24 h</b>',\n  '',\n  `🔎 Captadas: <b>${m.captadas}</b>   ✅ Publicadas: <b>${m.publicadas}</b>   ❌ Descartadas: ${m.descartadas}`,\n  `⛔️ Caducadas: ${m.caducadas}   ⚠️ PVP inflados detectados: <b>${m.pvp_inflados}</b>`,\n  `📈 Tasa de publicación: ${pct(m.publicadas, m.captadas)}`,\n  '',\n  `👆 Clics: <b>${m.clics}</b>   💰 Ventas conciliadas: <b>${m.ventas}</b>   (CR ${pct(m.ventas, m.clics)})`,\n  `💶 Comisión confirmada: <b>${eur(m.comision)}</b>`,\n  `🎯 Comisión potencial de lo publicado: ${eur(m.comision_potencial)}`,\n  `📊 EPC global: ${m.clics ? (Number(m.comision) / Number(m.clics)).toFixed(3) : '—'} € por clic`,\n  '',\n  `👥 Suscriptores: <b>${m.suscriptores}</b> (+${m.altas})   🔔 Alertas activas: ${m.alertas_activas}`,\n  '',\n  '<b>Rendimiento por categoría (7 días)</b>',\n  cat || '  sin datos'\n].join('\\n');\n\nreturn [{ json: { chat_id: m.chat_admin || $env.TELEGRAM_CHAT_ADMIN, texto } }];\n"
+      },
+      "id": "5bdd9754-2e19-547e-8b10-1342e9b3c667",
+      "name": "Redactar informe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.texto, parse_mode: 'HTML' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "e7b1d158-f8d5-59dd-8037-57d5b7ad12d0",
+      "name": "Enviar informe a administración",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        620,
+        620
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM precios_historico WHERE fecha < now() - interval '400 days';\nDELETE FROM clicks WHERE creado_en < now() - interval '180 days';\nDELETE FROM ofertas WHERE estado = 'descartada' AND creada_en < now() - interval '30 days';",
+        "options": {}
+      },
+      "id": "ba0f5ae9-8d52-5bb8-aa6b-fdfc578bd976",
+      "name": "Purgar histórico antiguo",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        840,
+        620
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "chollosbot-postgres",
+          "name": "Postgres ChollosBot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada hora": {
+      "main": [
+        [
+          {
+            "node": "Publicadas a revisar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publicadas a revisar": {
+      "main": [
+        [
+          {
+            "node": "Releer ficha de producto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Releer ficha de producto": {
+      "main": [
+        [
+          {
+            "node": "Comparar precio actual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comparar precio actual": {
+      "main": [
+        [
+          {
+            "node": "¿Ha caducado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Ha caducado?": {
+      "main": [
+        [
+          {
+            "node": "Marcar caducada en el canal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Actualizar estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar caducada en el canal": {
+      "main": [
+        [
+          {
+            "node": "Actualizar estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar estado": {
+      "main": [
+        [
+          {
+            "node": "Guardar precio revisado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada día a las 08:00": {
+      "main": [
+        [
+          {
+            "node": "Métricas del día",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Métricas del día": {
+      "main": [
+        [
+          {
+            "node": "Redactar informe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redactar informe": {
+      "main": [
+        [
+          {
+            "node": "Enviar informe a administración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar informe a administración": {
+      "main": [
+        [
+          {
+            "node": "Purgar histórico antiguo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "chollosbot-es"
+  },
+  "tags": [
+    {
+      "name": "chollosbot"
+    },
+    {
+      "name": "mantenimiento"
+    }
+  ]
+}
