@@ -16,3 +16,9 @@ __pycache__/
 # Sistema
 .DS_Store
 node_modules/
+
+# Datos reales de prospección y entrevistas: NUNCA al repositorio
+# (contienen datos personales; ver soluciones-pymes/cobranza-asistida/docs/02-criterios-lista-objetivo.md)
+soluciones-pymes/**/datos-reales/
+soluciones-pymes/**/*.real.*
+soluciones-pymes/**/*-real.*

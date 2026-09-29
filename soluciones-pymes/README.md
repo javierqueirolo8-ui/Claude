@@ -4,39 +4,52 @@ Herramientas pequeñas para problemas **comunes** de las pymes que tienen un rem
 Cada una nace de buscar el problema, comprobar los datos en su fuente y construir solo lo
 necesario, con pruebas.
 
-| Herramienta | Sector | Problema | Estado |
+| Carpeta | Sector | Problema | Estado |
 |---|---|---|---|
-| [`recordacitas/`](recordacitas/) | Negocios con cita previa o reserva | Citas y reservas a las que el cliente no se presenta | Hecha y verificada |
+| [`cobranza-asistida/`](cobranza-asistida/) | Pymes uruguayas que facturan a crédito a otras empresas | Facturas vencidas que nadie reclama a tiempo | **En diseño** (Punto de control 2): plan de entrevistas, criterios de la lista objetivo y arquitectura en n8n. Nada construido ni activado. |
+| [`biblioteca-tecnica/recordacitas/`](biblioteca-tecnica/recordacitas/) | Negocios con cita previa o reserva | Citas a las que el cliente no se presenta | **Archivada** como biblioteca técnica, no como producto. Sigue verificada. |
+
+Ver [`biblioteca-tecnica/`](biblioteca-tecnica/) para qué piezas se reutilizan.
 
 ---
 
 ## Cómo se eligió el problema
 
-Se buscaron problemas frecuentes de las pymes españolas y se descartó lo que no cumpliera las
-cuatro condiciones:
+Se buscaron problemas frecuentes de las pymes y se compararon tres nichos con sus datos y su
+riesgo. Se descartó lo que no cumpliera estas condiciones:
 
 1. **Frecuente y con coste medible**, con datos de fuentes localizables.
-2. **Remedio simple** y con evidencia de que funciona.
-3. **Resoluble con un fichero** que el negocio use solo: sin servidor, sin suscripción, sin
-   integraciones y sin tocar datos que no deba.
+2. **Remedio viable** para una persona sola, con evidencia de que alguien paga por resolverlo.
+3. **Estable y de bajo riesgo:** primera versión de solo lectura, con aprobación humana, sin
+   interrumpir la operativa del cliente ni exponer datos.
 4. **Verificable** de forma automática.
 
 ### Problemas evaluados
 
-**1. Citas y reservas no atendidas (no-shows) → resuelto con RecordaCitas.**
-Cumple las cuatro. Hay medición en restauración (3,3 % de reservas fantasma en 2025 según
-TheFork; en 9.500 restaurantes, 1,92 % sin protección frente a 1,52 % con reconfirmación por
-SMS), evidencia clínica de que el recordatorio mejora la asistencia (revisión Cochrane
-CD007458) y una solución que cabe en un fichero. Las cifras, con sus salvedades, están en el
-[README de la herramienta](recordacitas/README.md#el-problema).
+**1. Facturas cobradas tarde (cobranza asistida) → elegido; en diseño.**
+El período medio de pago de las empresas en España fue de **80,5 días** en el segundo semestre de
+2025 frente a un máximo legal de 60, y solo el **30,4 %** de los importes facturados se cobró
+puntualmente o por anticipado (Observatorio de la Morosidad de CEPYME, publicado en abril de 2026).
+Para Uruguay no hay un dato verificable, por lo que el siguiente paso son entrevistas. Detalle en
+[`cobranza-asistida/`](cobranza-asistida/).
 
-**2. Facturas cobradas tarde (morosidad) → no desarrollado.**
-Problema real: el período medio de pago de las empresas en España fue de **80,5 días** en el
-segundo semestre de 2025 frente a un máximo legal de 60, y solo el **30,4 %** de los importes
-facturados se cobró puntualmente o por anticipado (Observatorio de la Morosidad de CEPYME,
-publicado en abril de 2026). Un recordatorio escalonado de facturas vencidas sería igual de
-simple, pero reclamar intereses de demora tiene implicaciones legales que piden más cuidado que
-un aviso de cita. Queda como siguiente candidato.
+**2. Pedidos y documentos entrantes en distribuidoras pequeñas → no elegido.**
+Evidencia débil (sobre todo afirmaciones de proveedores de software) y riesgo medio por la
+precisión de la extracción.
+
+**3. Presupuestos y seguimiento en oficios → plan B.**
+Riesgo bajo y técnica más simple; se activa si las entrevistas de cobranza muestran reticencia a
+compartir la «foto de facturación».
+
+**Descartados:** alertas de licitaciones (al menos seis servicios ya existen; uno con plan gratis y
+otros desde 19 o 29 € al mes) y recordatorios de cita (nicho saturado; ver más abajo).
+
+**Recordatorios de cita (no-shows) → RecordaCitas, archivado.**
+Cumplía las condiciones técnicas y tenía evidencia: 3,3 % de reservas fantasma en 2025 según
+TheFork; en 9.500 restaurantes, 1,92 % sin protección frente a 1,52 % con reconfirmación por SMS;
+y evidencia clínica de que el recordatorio mejora la asistencia (revisión Cochrane CD007458). Pero
+es un nicho saturado, así que **no se ofrece**. Las cifras, con sus salvedades, están en el
+[README de la herramienta](biblioteca-tecnica/recordacitas/README.md#el-problema).
 
 ---
 

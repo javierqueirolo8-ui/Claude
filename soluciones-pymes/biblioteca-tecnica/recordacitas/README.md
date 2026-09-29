@@ -1,5 +1,12 @@
 # RecordaCitas · recordatorios de cita por WhatsApp
 
+> **ARCHIVADO · biblioteca técnica, no producto** (decisión del 29-sep-2026).
+> El nicho de recordatorios de cita está saturado y se descartó como oferta comercial. El código
+> y sus pruebas se conservan como **banco de pruebas y biblioteca de piezas reutilizables**
+> (lectura de CSV/TSV y codificaciones, fechas, teléfonos de Uruguay, plantillas de mensaje y
+> enlaces de WhatsApp). No se muestra a clientes. Sigue verificándose con `./verificar.sh`.
+> Qué se reutiliza y para qué: [`../README.md`](../README.md).
+
 Herramienta para **negocios con cita previa o reserva** (clínicas, centros de estética,
 peluquerías, fisioterapia, talleres, restaurantes…). Pegas la agenda de mañana, comprueba que
 cada cita y cada teléfono están bien y, con un clic por cliente, se abre tu WhatsApp con el
