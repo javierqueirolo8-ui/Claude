@@ -590,15 +590,21 @@ Necesito tu decisión en estos puntos; **hasta entonces no toco nada**.
 
 | # | Decisión | Opciones | Mi recomendación | Estado (30-sep) |
 |---|---|---|---|---|
-| D1 | ¿La instancia de n8n conectada es tu servidor de Oracle? ¿Puedo usarla como **banco de pruebas** con datos ficticios, prefijo `[COB-DEV]` y nada activo? | Sí / No / Otra instancia | Usarla solo como pruebas; PROD separada. | **Respondida: sí, es tu servidor de Oracle (30-sep).** Autorizada como banco de pruebas. |
+| D1 | ¿La instancia de n8n conectada es tu servidor de Oracle? ¿Puedo usarla como **banco de pruebas** con datos ficticios, prefijo `[COB-DEV]` y nada activo? | Sí / No / Otra instancia | Usarla solo como pruebas; PROD separada. | **Respondida: sí, es tu servidor de Oracle (30-sep).** Autorizada como banco de pruebas; **Etapa 2 autorizada el 30-sep** (solo `[COB-DEV]`, datos 100 % ficticios, nada de datos reales). |
 | D2 | Alcance inmediato | (a) Solo diseño; (b) empezar la Etapa 1 (núcleo puro, local, sin contactar a nadie) en paralelo a las entrevistas | (b) | **Respondida: (b). Etapa 1 hecha (30-sep).** La Etapa 2 espera tu OK. |
-| D3 | Canal de entrada | A · Drive con cuenta de servicio · B · buzón · C · manual | A; C para el primer piloto. | Abierta (no bloquea la Etapa 1). |
-| D4 | Modo de entrega con datos reales | `correo_completo` · `enlace_salida` | `enlace_salida` (un destinatario equivocado solo vería totales). | Abierta (no bloquea la Etapa 1). |
-| D5 | Remitente | Gmail personal (solo ficticios) · dominio propio con buzón profesional | Dominio propio antes de datos reales. | Abierta. |
-| D6 | Hosting de producción y región | Oracle Always Free · Oracle PAYG · servidor de pago; región de país adecuado | Ver sección 10.3. | **Región respondida: São Paulo.** Falta decidir el hosting de producción (antes de la Etapa 3). |
-| D7 | Consultas oficiales | Preguntar a la URCDP por la inscripción de la lista de prospectos, las notas y el libro; a la URSEC por el registro «No llame» | Hacerlo antes de guardar la primera lista real. | Abierta. Puedo redactar los borradores de consulta para que los envíes tú. |
-| D8 | Revisión de un abogado o contador local (una hora) | Sí / No | Sí, antes del primer contacto real: contrato de encargo, transferencia a Brasil y consulta sobre correo comercial. | Abierta. |
-| D9 | Variante local (sección 12) como demostración y alternativa | Sí / No / Después de las entrevistas | Después de las entrevistas. | Abierta. |
+| D3 | Canal de entrada | A · Drive con cuenta de servicio · B · buzón · C · manual | A; C para el primer piloto. | **Respondida: C (carga manual / recepción asistida) en el primer piloto**; migrar a A una vez validado. |
+| D4 | Modo de entrega con datos reales | `correo_completo` · `enlace_salida` | `enlace_salida` (un destinatario equivocado solo vería totales). | **Respondida: `enlace_salida`.** |
+| D5 | Remitente | Gmail personal (solo ficticios) · dominio propio con buzón profesional | Dominio propio antes de datos reales. | **Respondida:** Gmail personal solo para pruebas en DEV; dominio propio con buzón profesional (SPF y DKIM) antes de cualquier envío en frío o comunicación real. |
+| D6 | Hosting de producción y región | Oracle Always Free · Oracle PAYG · servidor de pago; región de país adecuado | Ver sección 10.3. | **Respondida:** São Paulo para DEV y pruebas sintéticas; si se valida el interés, la producción irá a una región amparada por la normativa de la URCDP **antes** de la primera exportación real. |
+| D7 | Consultas oficiales | Preguntar a la URCDP por la inscripción de la lista de prospectos, las notas y el libro; a la URSEC por el registro «No llame» | Hacerlo antes de guardar la primera lista real. | **En espera (30-sep)** hasta tener un cliente en N4 o N5. Riesgo asumido y medidas mientras tanto: ver el [plan de entrevistas, sección 9](01-plan-validacion.md#9-notas-síntesis-y-calendario). Puedo redactar los borradores de consulta cuando quieras. |
+| D8 | Revisión de un abogado o contador local (una hora) | Sí / No | Sí, antes del primer contacto real: contrato de encargo, transferencia a Brasil y consulta sobre correo comercial. | **En espera (30-sep)** hasta tener un cliente en N4 o N5. |
+| D9 | Variante local (sección 12) como demostración y alternativa | Sí / No / Después de las entrevistas | Después de las entrevistas. | **Respondida:** se mantiene documentada como plan de contingencia por si H5 muestra resistencia a compartir la cartera. |
+
+**Qué implican D3 y D4 juntas.** Con carga manual en el primer piloto (C) el archivo llega a ti y no a una carpeta del
+cliente, así que el flujo necesita una entrada alternativa a la carpeta compartida. Con `enlace_salida`, el informe
+completo vive en una carpeta de **salida** a la que el dueño debe tener acceso: hay que elegir en quién recae esa
+carpeta (la tuya, compartida con su cuenta de Google, o la suya). Las dos cosas se resuelven en la Etapa 3; en la
+Etapa 2 la entrada y la salida son simuladas y intercambiables.
 
 ---
 

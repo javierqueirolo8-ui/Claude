@@ -206,14 +206,17 @@ hacia abajo (H1: 4,5 pasa a 4). Se evalúan **en este orden** y decide la primer
 
 **Criterio económico de viabilidad (lo defines tú antes de empezar).** Una idea puede tener dolor y datos
 compartibles y aun así no ser un negocio. Antes de la primera entrevista hay que fijar:
-- `[P]`: la cuota mensual mínima por cliente con la que el servicio te sirve. **Por definir.**
-- `[N]`: cuántos clientes de pago necesitas para que el proyecto valga la pena. **Por definir.**
+- `[P]`: la cuota mensual mínima por cliente con la que el servicio te sirve. **Fijada el 30-sep-2026: USD 150 al mes**
+  (unos $U 6.000 al cambio aproximado que indicaste) **más un setup único de USD 400.**
+- `[N]`: cuántos clientes de pago necesitas para que el proyecto valga la pena. **Fijado el 30-sep-2026: 3 clientes de
+  pago recurrentes** (meta de validación de la fase piloto).
 
 El criterio se cumple cuando al menos **4 de las 15** entrevistas (propuesta) dan un rango de precio que
-llega a `[P]`: H7, con una cifra propia o comparada con lo que ya gastan o pierden, no un «me parece
-bien». `[N]` no se puede probar con 15 entrevistas; sirve después para dimensionar el esfuerzo comercial
-a partir de la proporción de empresas candidatas que salga de ellas. Hasta que fijes `[P]` y `[N]`, la fila
-GO no puede activarse.
+llega a `[P]` (USD 150 al mes): H7, con una cifra propia o comparada con lo que ya gastan o pierden, no un
+«me parece bien». El setup de USD 400 se prueba aparte, como reacción, y no cuenta para el criterio. `[N]` (3
+clientes de pago) no se puede probar con 15 entrevistas; sirve después para dimensionar el esfuerzo comercial
+a partir de la proporción de empresas candidatas que salga de ellas. Con `[P]` y `[N]` fijados, la fila GO
+ya puede activarse.
 
 ---
 
@@ -228,10 +231,26 @@ puede ocultar que casi nadie contestó.
 
 | Semana | Trabajo | Requiere tu OK |
 |---|---|---|
-| 0 | Aprobar este plan, el guion y los mensajes. Fijar `[P]` y `[N]`. Preparar registros fuera del repositorio. Consultar a la URCDP por la inscripción de la base (documento 02, sección 9). Armar la primera lista de 20, con **contadores y empresas** (documento 02). Ensayar el guion en voz alta. | Sí, todo. |
+| 0 | Aprobar este plan, el guion y los mensajes. ~~Fijar `[P]` y `[N]`~~ (hecho el 30-sep). Preparar registros fuera del repositorio. Consultar a la URCDP por la inscripción de la base (documento 02, sección 9): **en espera por decisión del 30-sep, ver abajo**. Armar la primera lista de 20, con **contadores y empresas** (documento 02). Ensayar el guion en voz alta. | Sí, todo. |
 | 1 a 3 | Primeros contactos: contadores, eventos y LinkedIn; correo a direcciones públicas dentro del tope. Primeras 2 o 3 entrevistas (calibración). | Cada contacto, antes. |
 | 4 a 9 | 15 entrevistas, unas 2 o 3 por semana. Síntesis de 30 minutos cada semana. Bola de nieve al cierre de cada una. Ajustar la lista según lo aprendido. | Cada tanda de contactos, antes. |
 | 10 | Síntesis final y decisión según la sección 8. Si sale AMPLIAR: 2 a 3 semanas más para 5 entrevistas. | Sí. |
+
+**Pendiente de confirmar (respuesta del 30-sep).** El mensaje con las definiciones dejó **sin completar** dos campos entre
+corchetes —las horas semanales y la fecha objetivo de decisión— y habla de «10 a 12 entrevistas» mientras que el
+ajuste del 30-sep fue de **15**. Mientras no se confirme, **rige 15** y el calendario de 10 semanas de arriba.
+Para decidir: con 6 a 8 horas semanales y sin contactos previos, 4 a 5 semanas alcanzan para unas 5 entrevistas hechas o
+agendadas (el punto de control de la semana 4), no para completar la muestra; una decisión a fines de octubre
+solo sería posible con menos entrevistas y más incertidumbre (con 9 de 15 el intervalo de confianza ya es de 36 % a
+80 %).
+
+**Consulta a la URCDP en espera (D7).** El 30-sep se decidió no consultar a la URCDP/URSEC ni contratar asesoría
+legal hasta tener un cliente en N4 o N5. Mi lectura del art. 29 es que la lista con nombres de personas y las notas
+de entrevistas son una base de datos personales que conviene inscribir **antes** de guardarla. Mientras se espera,
+el riesgo lo asumes tú y se reduce así: la primera lista es **a nivel empresa**, con datos publicados por la propia
+empresa y sin nombres de personas salvo el profesional titular de un estudio; nada en la nube ni en el repositorio;
+notas con código y sin nombre; y **ningún contacto sin tu OK previo**. Sigue vigente: nada de teléfono ni WhatsApp
+en frío (Ley 19.996, «No Llame»).
 
 **Puntos de control de alcance.** Fin de la semana 4: al menos 5 entrevistas hechas o agendadas. Fin de la
 semana 6: al menos 8 hechas. Fin de la semana 8: al menos 12. Si un punto no se cumple, se replantean los
