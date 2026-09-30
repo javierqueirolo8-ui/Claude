@@ -168,9 +168,18 @@ var Util = (function () {
     return fechaValida(y, m, d) ? ok(isoDe(y, m, d)) : mal('E_FECHA_INVALIDA'); // solo 2000 … 2099
   }
 
+  // Instante ISO estricto: fecha de calendario real, hora 00–23, minutos y segundos 00–59 y desfase explícito.
+  // (El analizador de fechas del motor «arregla» 30 de febrero o las 24:00; aquí eso es un error.)
+  var INSTANTE_RE = /^(\d{4}-\d{2}-\d{2})T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
+
   // Fecha local en una zona IANA de un instante (texto ISO con desfase). Determinista: Intl con zona explícita.
+  // Devuelve null si el instante o la zona no son válidos.
   function fechaEnZona(instanteISO, zona) {
     try {
+      var m = typeof instanteISO === 'string' ? INSTANTE_RE.exec(instanteISO) : null;
+      if (!m || !esISO(m[1])) return null;
+      // sin zona explícita, Intl usaría la del sistema: resultado distinto según dónde corra; eso no se admite
+      if (typeof zona !== 'string' || !/^[A-Za-z_]+(?:\/[A-Za-z_+-]+){0,2}$/.test(zona)) return null;
       var f = new Date(instanteISO);
       if (isNaN(f.getTime())) return null;
       var partes = new Intl.DateTimeFormat('en-US', { timeZone: zona, year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -392,7 +401,7 @@ var Util = (function () {
     texto: texto, limpiar: limpiar, sinAcentos: sinAcentos, clave: clave, escHtml: escHtml,
     pad2: pad2, sumarSeguro: sumarSeguro, contarPorCodigo: contarPorCodigo, MAX_SEGURO: MAX_SEGURO,
     isoDe: isoDe, partesISO: partesISO, esISO: esISO, fechaValida: fechaValida, sumarDias: sumarDias, diasEntre: diasEntre,
-    semanaISO: semanaISO, formatoFecha: formatoFecha, parsearFecha: parsearFecha, desdeSerialExcel: desdeSerialExcel,
+    semanaISO: semanaISO, formatoFecha: formatoFecha, parsearFecha: parsearFecha, desdeSerialExcel: desdeSerialExcel, fechaEnZona: fechaEnZona,
     parsearImporte: parsearImporte, monedaDeTexto: monedaDeTexto, formatearImporte: formatearImporte,
     formatearNumero: formatearNumero, agruparMiles: agruparMiles, LIMITE_CENTAVOS: LIMITE_CENTAVOS,
     normalizarCorreo: normalizarCorreo, normalizarTelefono: normalizarTelefono,

@@ -160,6 +160,18 @@ test('«omitida» y el modo real también son válidos; el código de error pued
   assert.equal(f.codigo_error, null);
 });
 
+test('estado y código van juntos: error e incidencia exigen código; «ok» no puede llevarlo', () => {
+  const inc = plano(M6.filaLibro({ ...FILA(), estado: 'incidencia', codigo_error: 'E_DEMASIADAS_APARTADAS' }));
+  assert.equal(inc.estado, 'incidencia');
+  assert.equal(inc.codigo_error, 'E_DEMASIADAS_APARTADAS');
+  for (const estado of ['incidencia', 'error']) {
+    assert.equal(codigo(() => M6.filaLibro({ ...FILA(), estado, codigo_error: null })), 'E_LIBRO_INVALIDO', estado + ' sin código');
+    assert.equal(codigo(() => M6.filaLibro({ ...FILA(), estado, codigo_error: undefined })), 'E_LIBRO_INVALIDO', estado + ' sin código (ausente)');
+  }
+  assert.equal(codigo(() => M6.filaLibro({ ...FILA(), estado: 'ok', codigo_error: 'E_PRUEBA' })), 'E_LIBRO_INVALIDO');
+  for (const c of [null, 'E_PRUEBA']) assert.equal(M6.filaLibro({ ...FILA(), estado: 'omitida', codigo_error: c }).estado, 'omitida');
+});
+
 test('ni una columna de más: nombres, correos, importes o cualquier otro dato no entran en el libro', () => {
   for (const extra of ['deudor_nombre', 'contacto_mail', 'importe_centavos', 'detalle', 'mensaje', 'nombre', 'factura_ref', 'x', '__proto__', 'constructor', 'clave']) {
     const d = JSON.parse(JSON.stringify(FILA()));
@@ -225,13 +237,14 @@ test('canario: un valor rechazado nunca aparece en el mensaje del error', () => 
 });
 
 test('propiedad: una fila que pasa siempre tiene solo columnas conocidas con contadores enteros y coherentes', () => {
-  const estados = ['ok', 'error', 'omitida', 'OK', '', null];
+  const estados = ['ok', 'error', 'incidencia', 'omitida', 'OK', '', null];
   for (const semilla of azar.semillas(303)) {
     const az = azar.crear(semilla);
     let aceptadas = 0;
     for (let i = 0; i < 4000; i++) {
       const d = FILA();
       if (az.prob(0.3)) d.estado = az.elegir(estados);
+      if ((d.estado === 'error' || d.estado === 'incidencia') && az.prob(0.8)) d.codigo_error = 'E_PRUEBA';
       if (az.prob(0.3)) d.n_filas = az.elegir([0, 1, 10, 100, -1, 1.5, '3', 1000000, 1000001]);
       if (az.prob(0.3)) d.n_vencidas = az.elegir([0, 1, 5, 200, -2, 0.5]);
       if (az.prob(0.3)) d.n_apartadas = az.elegir([0, 1, 5, 200, -2, 2.5]);
@@ -245,7 +258,9 @@ test('propiedad: una fila que pasa siempre tiene solo columnas conocidas con con
       for (const c of ['n_filas', 'n_vencidas', 'n_apartadas']) assert.ok(Number.isInteger(f[c]) && f[c] >= 0);
       assert.ok(f.n_vencidas + f.n_apartadas <= f.n_filas);
       assert.ok(f.codigo_error === null || /^E_[A-Z0-9_]{2,40}$/.test(f.codigo_error));
-      assert.ok(['ok', 'error', 'omitida'].includes(f.estado));
+      assert.ok(['ok', 'incidencia', 'error', 'omitida'].includes(f.estado));
+      if (f.estado === 'error' || f.estado === 'incidencia') assert.notEqual(f.codigo_error, null);
+      if (f.estado === 'ok') assert.equal(f.codigo_error, null);
     }
     assert.ok(aceptadas > 300, 'aceptadas: ' + aceptadas);
   }
@@ -314,14 +329,14 @@ test('tabla de decisión completa', () => {
     [false, 'libre', 'procesar'], [false, 'ocupado', 'omitir_en_curso'], [false, 'vencido', 'alertar_bloqueo_vencido']
   ];
   for (const [ok, bloqueo, esperado] of t) {
-    assert.equal(M6.decidirEjecucion({ hay_fila_ok: ok, bloqueo }), esperado, ok + ' + ' + bloqueo);
+    assert.equal(M6.decidirEjecucion({ ya_resuelto: ok, bloqueo }), esperado, ok + ' + ' + bloqueo);
   }
 });
 
 test('«procesar» es la única decisión que permite trabajar, y solo con libro sin fila «ok» y bloqueo libre', () => {
   const decisiones = new Set();
   for (const ok of [true, false]) for (const b of ['libre', 'ocupado', 'vencido']) {
-    const d = M6.decidirEjecucion({ hay_fila_ok: ok, bloqueo: b });
+    const d = M6.decidirEjecucion({ ya_resuelto: ok, bloqueo: b });
     decisiones.add(d);
     if (d === 'procesar') assert.deepEqual([ok, b], [false, 'libre']);
   }
@@ -329,8 +344,8 @@ test('«procesar» es la única decisión que permite trabajar, y solo con libro
 });
 
 test('una decisión con datos raros falla con código, no elige por su cuenta', () => {
-  for (const e of [null, undefined, {}, { hay_fila_ok: 'true', bloqueo: 'libre' }, { hay_fila_ok: 1, bloqueo: 'libre' }, { hay_fila_ok: false, bloqueo: 'LIBRE' },
-    { hay_fila_ok: false }, { bloqueo: 'libre' }, { hay_fila_ok: false, bloqueo: null }, 'x', 5]) {
+  for (const e of [null, undefined, {}, { ya_resuelto: 'true', bloqueo: 'libre' }, { ya_resuelto: 1, bloqueo: 'libre' }, { ya_resuelto: false, bloqueo: 'LIBRE' },
+    { ya_resuelto: false }, { bloqueo: 'libre' }, { ya_resuelto: false, bloqueo: null }, 'x', 5]) {
     assert.equal(codigo(() => M6.decidirEjecucion(e)), 'E_DECISION_INVALIDA', JSON.stringify(e));
   }
 });
@@ -343,7 +358,7 @@ test('escenario: dos ejecuciones seguidas con el mismo archivo procesan una sola
   const correr = (cliente, fecha, huella, ahora) => {
     const clave = M6.claveEjecucion(cliente, fecha, huella);
     const decision = M6.decidirEjecucion({
-      hay_fila_ok: libro.some((f) => f.clave === clave && f.estado === 'ok'),
+      ya_resuelto: libro.some((f) => f.clave === clave && f.estado === 'ok'),
       bloqueo: M6.estadoBloqueo(bloqueos.get(cliente) || null, ahora)
     });
     if (decision !== 'procesar') return decision;
@@ -362,8 +377,8 @@ test('escenario: dos ejecuciones seguidas con el mismo archivo procesan una sola
 
 test('escenario: una ejecución caída deja un bloqueo vencido y el sistema avisa en vez de reintentar solo', () => {
   const bloqueo = { expira_utc: '2026-10-05T11:30:00Z' };
-  assert.equal(M6.decidirEjecucion({ hay_fila_ok: false, bloqueo: M6.estadoBloqueo(bloqueo, '2026-10-05T11:10:00Z') }), 'omitir_en_curso');
-  assert.equal(M6.decidirEjecucion({ hay_fila_ok: false, bloqueo: M6.estadoBloqueo(bloqueo, '2026-10-05T12:00:00Z') }), 'alertar_bloqueo_vencido');
+  assert.equal(M6.decidirEjecucion({ ya_resuelto: false, bloqueo: M6.estadoBloqueo(bloqueo, '2026-10-05T11:10:00Z') }), 'omitir_en_curso');
+  assert.equal(M6.decidirEjecucion({ ya_resuelto: false, bloqueo: M6.estadoBloqueo(bloqueo, '2026-10-05T12:00:00Z') }), 'alertar_bloqueo_vencido');
 });
 
 test('no modifica sus argumentos', () => {

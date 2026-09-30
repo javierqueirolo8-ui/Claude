@@ -204,6 +204,20 @@ var M1 = (function () {
 
   function nombreDeudor(txt) { return Util.limpiar(txt); }
 
+  // Fila de «Total»: sin fecha de vencimiento y, o bien sin número ni cliente, o bien con la palabra «Total» (o
+  // «Subtotal», «Total general»…) como único texto identificador. Solo si la configuración lo pide.
+  var ETIQUETAS_TOTAL = ['total', 'totales', 'subtotal', 'subtotales', 'totalgeneral', 'sumatotal'];
+  function etiquetaDeTotal(v) { return ETIQUETAS_TOTAL.indexOf(Util.clave(v)) >= 0; }
+
+  function esFilaDeTotal(cel, indice) {
+    if (!celdaVacia(cel('vencimiento'))) return false;
+    var f = cel('factura'), d = cel('deudor');
+    if (celdaVacia(f) && celdaVacia(d)) return indice.serie === undefined || celdaVacia(cel('serie'));
+    if (etiquetaDeTotal(f)) return celdaVacia(d) || etiquetaDeTotal(d);
+    if (etiquetaDeTotal(d)) return celdaVacia(f);
+    return false;
+  }
+
   /* ------------------------------------------------------------- núcleo común */
 
   function resultadoVacio(codigo, detalle, cfg) {
@@ -262,8 +276,7 @@ var M1 = (function () {
 
       function cel(campo) { return indice[campo] === undefined ? undefined : arreglo[indice[campo]]; }
 
-      if (cfg.ignorarTotales && celdaVacia(cel('factura')) && celdaVacia(cel('deudor')) && celdaVacia(cel('vencimiento')) &&
-          (indice.serie === undefined || celdaVacia(cel('serie')))) { totalesIgnorados++; return; }
+      if (cfg.ignorarTotales && esFilaDeTotal(cel, indice)) { totalesIgnorados++; return; }
 
       // Largo de cada celda leída (un texto enorme no es un dato de factura)
       var demasiado = Object.keys(indice).some(function (campo) { return Util.limpiar(cel(campo)).length > cfg.maxCelda; });

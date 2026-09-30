@@ -283,3 +283,16 @@ test('contarPorCodigo ignora entradas que no traen un código válido', () => {
   assert.deepEqual(U(() => Util.contarPorCodigo([{ codigo: 'E_AA' }, { codigo: 'E_AA' }, { codigo: 'E_BB' }, { codigo: 'E_A' }, { codigo: 'texto libre' }, null, {}])),
     { E_AA: 2, E_BB: 1 });
 });
+
+test('fechaEnZona: el día local de un instante, y null ante cualquier instante o zona dudosos', () => {
+  assert.equal(Util.fechaEnZona('2026-10-06T02:59:59Z', 'America/Montevideo'), '2026-10-05');
+  assert.equal(Util.fechaEnZona('2026-10-06T03:00:00Z', 'America/Montevideo'), '2026-10-06');
+  assert.equal(Util.fechaEnZona('2026-10-05T23:00:00-03:00', 'America/Montevideo'), '2026-10-05');
+  assert.equal(Util.fechaEnZona('2026-10-05T20:00:00.123Z', 'Asia/Tokyo'), '2026-10-06');
+  assert.equal(Util.fechaEnZona('2026-10-05T20:00:00Z', 'UTC'), '2026-10-05');
+  for (const malo of ['2026-02-30T00:00:00Z', '2026-13-01T00:00:00Z', '2026-10-05T24:00:00Z', '2026-10-05T25:00:00Z', '2026-10-05T11:60:00Z',
+    '2026-10-05T11:00:60Z', '2026-10-05T11:00:00', '2026-10-05 11:00:00Z', '2026-10-05', '05/10/2026', '1999-12-31T00:00:00Z', 'ahora', '', null, undefined, 5, {}]) {
+    assert.equal(Util.fechaEnZona(malo, 'America/Montevideo'), null, String(malo));
+  }
+  for (const zona of ['Marte/Olimpo', '', null, undefined, 5, '../etc']) assert.equal(Util.fechaEnZona('2026-10-05T11:00:00Z', zona), null, String(zona));
+});

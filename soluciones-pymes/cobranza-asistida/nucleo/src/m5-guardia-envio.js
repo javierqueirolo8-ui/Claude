@@ -24,6 +24,12 @@ var M5 = (function () {
 
   function noEnviar(motivo, bloqueados) { return resultado('no_enviar', [], [motivo], bloqueados || []); }
 
+  // Llave doble: interruptor general abierto, «sin ensayo» a nivel general Y cliente en modo «real».
+  // Es la única definición de «envío real»; el resto del núcleo la consulta aquí.
+  function esEnvioReal(guardias, modoCliente) {
+    return !!guardias && typeof guardias === 'object' && guardias.permitido === true && guardias.dry_run === false && modoCliente === 'real';
+  }
+
   /* entrada: { solicitados, lista_blanca, guardias:{permitido, dry_run}, modo_cliente, remitente_prueba, max_destinatarios? } */
   function guardiaEnvio(e) {
     if (!e || typeof e !== 'object') return noEnviar('ENTRADA_INVALIDA');
@@ -48,13 +54,12 @@ var M5 = (function () {
     });
     if (bloqueados.length) return noEnviar('DESTINATARIO_BLOQUEADO', bloqueados);
 
-    var real = e.guardias.dry_run === false && e.modo_cliente === 'real';
-    if (real) return resultado('enviar', aceptados, [], []);
+    if (esEnvioReal(e.guardias, e.modo_cliente)) return resultado('enviar', aceptados, [], []);
 
     var rp = e.remitente_prueba;
     if (typeof rp !== 'string' || Util.normalizarCorreo(rp) !== rp) return noEnviar('REMITENTE_PRUEBA_INVALIDO');
     return resultado('redirigir_ensayo', [rp], ['ENSAYO'], []);
   }
 
-  return { TOPE_ABSOLUTO: TOPE_ABSOLUTO, guardiaEnvio: guardiaEnvio };
+  return { TOPE_ABSOLUTO: TOPE_ABSOLUTO, esEnvioReal: esEnvioReal, guardiaEnvio: guardiaEnvio };
 })();

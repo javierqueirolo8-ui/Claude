@@ -12,7 +12,9 @@
 var M6 = (function () {
   'use strict';
 
-  var ESTADOS = ['ok', 'error', 'omitida'];
+  // ok: informe preparado y entregado · incidencia: se avisó al dueño de un problema con el archivo (o de que no llegó)
+  // error: falló algo y se avisó a Javier · omitida: se decidió no hacer nada
+  var ESTADOS = ['ok', 'incidencia', 'error', 'omitida'];
   var MODOS = ['dry', 'real'];
   var CLAVES_LIBRO = ['cliente_id', 'semana_iso', 'hash_archivo', 'estado', 'iniciada_utc', 'terminada_utc',
     'n_filas', 'n_vencidas', 'n_apartadas', 'codigo_error', 'modo'];
@@ -84,6 +86,9 @@ var M6 = (function () {
       contador(d.n_filas) && contador(d.n_vencidas) && contador(d.n_apartadas) && d.n_vencidas + d.n_apartadas <= d.n_filas &&
       (d.codigo_error === null || d.codigo_error === undefined || (typeof d.codigo_error === 'string' && CODIGO_RE.test(d.codigo_error))) &&
       MODOS.indexOf(d.modo) >= 0;
+    // un error o una incidencia sin código no sirve para diagnosticar; un «ok» con código es una contradicción
+    var conCodigo = d.codigo_error !== null && d.codigo_error !== undefined;
+    if (ok && ((d.estado === 'error' || d.estado === 'incidencia') ? !conCodigo : (d.estado === 'ok' && conCodigo))) ok = false;
     if (!ok) Util.fallar('E_LIBRO_INVALIDO');
     return {
       clave: d.cliente_id + '|' + d.semana_iso + '|' + d.hash_archivo,
@@ -103,10 +108,10 @@ var M6 = (function () {
     return utcCanonico(fila.expira_utc) > utcCanonico(ahora) ? 'ocupado' : 'vencido';
   }
 
-  // Qué hacer al empezar una ejecución.
+  // Qué hacer al empezar una ejecución. ya_resuelto: el libro ya tiene, con la misma clave, una fila «ok» o «incidencia».
   function decidirEjecucion(e) {
-    if (!e || typeof e.hay_fila_ok !== 'boolean' || ['libre', 'ocupado', 'vencido'].indexOf(e.bloqueo) < 0) Util.fallar('E_DECISION_INVALIDA');
-    if (e.hay_fila_ok) return 'omitir_ya_procesado';
+    if (!e || typeof e.ya_resuelto !== 'boolean' || ['libre', 'ocupado', 'vencido'].indexOf(e.bloqueo) < 0) Util.fallar('E_DECISION_INVALIDA');
+    if (e.ya_resuelto) return 'omitir_ya_procesado';
     if (e.bloqueo === 'ocupado') return 'omitir_en_curso';
     if (e.bloqueo === 'vencido') return 'alertar_bloqueo_vencido'; // una ejecución anterior murió: se avisa, no se reintenta sola
     return 'procesar';

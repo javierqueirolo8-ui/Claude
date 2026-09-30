@@ -222,6 +222,24 @@ test('filas vacías no cuentan; las filas de total se ignoran solo si se pide', 
   assert.equal(con.resumen.total, 1);
 });
 
+test('filas de «Total» con la etiqueta en la columna de factura o de cliente: se ignoran solo si se pide y solo si son inequívocas', () => {
+  const t = csv('B1;Bien;100;01/09/2026;$U', 'Total;;5.000,00;;', ';Total general;5.000,00;;', 'SUB-TOTAL;;2.500,00;;', 'Totales;;7.500,00;;');
+  const con = leer(t, cfgCon({ ignorar_filas_de_total: true }));
+  assert.equal(con.resumen.totales_ignorados, 4);
+  assert.equal(con.apartadas.length, 0);
+  assert.equal(con.facturas.length, 1);
+  const sin = leer(t);
+  assert.equal(sin.resumen.totales_ignorados, 0);
+  assert.equal(sin.apartadas.length, 4);
+  // con fecha de vencimiento, o acompañada de un cliente, NO es una fila de total: se trata como cualquier otra
+  const dudosas = csv('B1;Bien;100;01/09/2026;$U', 'Total;Empresa X;5.000,00;01/09/2026;$U', 'Total;Empresa Y;5.000,00;;', 'C3;Total;5.000,00;;');
+  const r = leer(dudosas, cfgCon({ ignorar_filas_de_total: true }));
+  assert.equal(r.resumen.totales_ignorados, 0);
+  assert.deepEqual(r.apartadas.map((a) => a.fila), [4, 5]); // sin vencimiento: se apartan; la de la fila 3 tiene fecha y es una factura más
+  assert.equal(r.facturas.length, 2);
+  assert.equal(r.resumen.total, r.resumen.aceptadas + r.resumen.apartadas);
+});
+
 test('duplicadas idénticas: se conserva la primera; en conflicto: se apartan todas', () => {
   const r = leer(csv('A1;Uno;100;01/09/2026;$U', 'a 1;UNO;100;01/09/2026;$U', 'B2;Dos;100;01/09/2026;$U', 'B2;Dos;150;01/09/2026;$U', 'C3;Tres;100;01/09/2026;$U', 'C3;Tres;100;01/09/2026;US$'));
   assert.deepEqual(r.facturas.map((f) => [f.factura_ref, f.moneda]).sort(), [['A1', 'UYU'], ['C3', 'USD'], ['C3', 'UYU']]);
