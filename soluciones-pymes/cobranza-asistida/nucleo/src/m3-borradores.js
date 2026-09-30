@@ -213,9 +213,10 @@ var M3 = (function () {
     var demo = !!(entrada.opciones && entrada.opciones.demo === true);
 
     var borradores = [], sinBorrador = [];
-    entrada.vencidas.forEach(function (v) {
+    entrada.vencidas.forEach(function (v, indice) {
       validarVencida(v);
-      if (v.escalon === 'en_disputa') { sinBorrador.push({ factura_ref: v.factura_ref, motivo: 'en_disputa' }); return; }
+      var fila = typeof v.fila_origen === 'number' ? v.fila_origen : null;
+      if (v.escalon === 'en_disputa') { sinBorrador.push({ indice: indice, factura_ref: v.factura_ref, moneda: v.moneda, fila_origen: fila, motivo: 'en_disputa' }); return; }
       var p = plantillas[v.escalon];
       if (!p) Util.fallar('E_PLANTILLA_FALTANTE');
 
@@ -240,7 +241,10 @@ var M3 = (function () {
         mail = enlaceMail(v.contacto_mail, asunto, texto);
         if (!mail) avisos.push('A_ENLACE_MAIL_OMITIDO');
       }
-      borradores.push({ factura_ref: v.factura_ref, escalon: v.escalon, asunto: asunto, texto: texto, enlace_wa: wa, enlace_mail: mail, avisos: avisos });
+      borradores.push({
+        indice: indice, factura_ref: v.factura_ref, moneda: v.moneda, fila_origen: fila, escalon: v.escalon,
+        asunto: asunto, texto: texto, enlace_wa: wa, enlace_mail: mail, avisos: avisos
+      });
     });
     return { borradores: borradores, sin_borrador: sinBorrador, demo: demo };
   }

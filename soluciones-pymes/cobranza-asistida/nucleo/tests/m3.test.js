@@ -71,7 +71,9 @@ test('la factura, el importe y el vencimiento están en TODO borrador (propiedad
 
 test('en disputa: no hay borrador', () => {
   const r = borr([venc('A', 10, { en_disputa: true }), venc('B', 10)]);
-  assert.deepEqual(r.sin_borrador, [{ factura_ref: 'A', motivo: 'en_disputa' }]);
+  assert.equal(r.sin_borrador.length, 1);
+  assert.equal(r.sin_borrador[0].factura_ref, 'A');
+  assert.equal(r.sin_borrador[0].motivo, 'en_disputa');
   assert.deepEqual(r.borradores.map((b) => b.factura_ref), ['B']);
 });
 
