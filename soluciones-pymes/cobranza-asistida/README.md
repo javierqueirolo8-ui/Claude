@@ -34,7 +34,7 @@ deudor.
 | [`docs/01-plan-validacion.md`](docs/01-plan-validacion.md) | Plan de entrevistas: hipótesis, a quién, cómo llegar, guion, escalera de compromiso, reglas de decisión fijadas de antemano y borradores de invitación (**no enviados**). |
 | [`docs/02-criterios-lista-objetivo.md`](docs/02-criterios-lista-objetivo.md) | Cómo armar la lista de empresas de Uruguay: perfil, fuentes permitidas y prohibidas, la regla de **no inventar correos**, protocolo de primer contacto, bases de datos y derechos. |
 | [`docs/03-arquitectura-n8n.md`](docs/03-arquitectura-n8n.md) | Arquitectura modular en n8n: alcance, módulos, contratos, seguridad y privacidad por diseño, infraestructura, pruebas, etapas, riesgos y decisiones abiertas. |
-| [`nucleo/`](nucleo/) | **El código** (Etapa 1): módulos puros M0 a M7 y su cableado, generador de datos ficticios, simulador del flujo diario, más de 340 pruebas, informe de demostración y `verificar.sh`. Empezar por su [README](nucleo/README.md). |
+| [`nucleo/`](nucleo/) | **El código** (Etapa 1): módulos puros M0 a M7 y su cableado, generador de datos ficticios, simulador del flujo diario, más de 350 pruebas, 102 mutaciones, informe de demostración y `verificar.sh`. Empezar por su [README](nucleo/README.md). |
 | [`plantillas/`](plantillas/) | Plantillas **vacías**: notas de entrevista, registro de hipótesis y lista objetivo. |
 
 ## Reglas que no se rompen

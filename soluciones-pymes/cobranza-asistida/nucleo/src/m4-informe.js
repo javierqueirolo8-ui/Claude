@@ -278,7 +278,7 @@ var M4 = (function () {
     var pares = a.vencidas.map(function (v, i) { return { v: v, b: null, i: i }; });
     b.borradores.forEach(function (x) { pares[x.indice].b = x; });
     var h = ['<h2>Para revisar y enviar</h2>',
-      '<p class="nota">Este informe no envía nada a ningún cliente. Antes de enviar, revisar cada mensaje; el texto se copia con un clic sobre él.</p>'];
+      '<p class="nota">Este informe no envía nada a ningún cliente. Antes de enviar, revisar cada mensaje; un clic sobre el texto lo selecciona para copiarlo.</p>'];
     var mostrados = 0, omitidos = 0;
     ordenGrupos(a).forEach(function (grupo) {
       var del = pares.filter(function (p) { return p.v.escalon === grupo; });

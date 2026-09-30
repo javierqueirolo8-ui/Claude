@@ -494,6 +494,15 @@ que el código dentro del workflow es idéntico al del archivo: se prueba lo que
 **Criterios de salida de la etapa de desarrollo:** 0 fallos en los niveles 1 a 7; todas las
 mutaciones detectadas; canarios sin rastro; guía manual ejecutada por ti con éxito.
 
+**Estado de la Etapa 1 (30-sep-2026).** Hechos los niveles 1 a 5 sobre el núcleo y, del nivel 6, lo que se
+puede comprobar sin n8n (código puro sin red ni credenciales, `DRY_RUN` por defecto, datos de ejemplo solo
+ficticios, catálogo de códigos al día). Resultado: más de 350 pruebas verdes en seis zonas horarias; canarios de
+privacidad; 102 mutaciones, todas detectadas salvo dos toleradas con su razón escrita; un simulador del
+flujo diario con más de 40 escenarios (doble ejecución, caídas, correo caído, descarga cortada…); y el informe
+de demostración comprobado en Chromium. Los niveles 1 y 2 usan datos **sintéticos** (no había exportaciones
+reales que anonimizar). Falta lo que solo puede probarse en n8n —nivel 6 sobre el workflow y nivel 7— y la guía
+manual (nivel 9). Todo se repite con [`nucleo/verificar.sh`](../nucleo/verificar.sh).
+
 ---
 
 ## 12. Variante «los datos no salen de la empresa» (modo local)

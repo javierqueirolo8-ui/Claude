@@ -85,7 +85,7 @@ Si algo falla en cualquier punto: alerta a Javier **solo con códigos** (M6), fi
 | El mismo archivo no se procesa dos veces, tampoco al cruzar el lunes (la semana de la clave es la de la **exportación**); una caída no duplica ni pierde el informe. | Escenarios de `e2e.test.js`: archivo fresco que cruza el lunes, re-exportación la semana siguiente, doble ejecución intercalada, caída antes y después de enviar, correo caído, descarga cortada. |
 | El informe es inerte: sin scripts, sin red, todo texto del archivo escapado. | `m4.test.js` (lista de etiquetas permitidas), `navegador.js` (Chromium real, sin JavaScript, datos hostiles, contraste, móvil). |
 | El código es puro y no esconde nada. | Cargador de pruebas sin `require`, red, archivos, reloj ni azar; `guardarrailes.test.js` (sin caracteres invisibles «Trojan Source», solo códigos literales, sin `throw` con texto libre, catálogo al día, sin credenciales). |
-| Las pruebas detectan las averías. | `mutaciones.js`: se rompe una regla a propósito, de a una, y alguna prueba tiene que fallar. |
+| Las pruebas detectan las averías. | `mutaciones.js`: 102 averías provocadas de a una (destinatario sin filtrar, fecha desplazada, moneda mezclada, informe sin escapar…); cada una debe hacer fallar alguna prueba. Dos están **toleradas con la razón escrita** (una red de seguridad inalcanzable y un mutante equivalente). |
 
 ## Datos ficticios y demostración
 

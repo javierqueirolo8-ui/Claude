@@ -365,32 +365,28 @@ hoy, con los nombres tapados, o presentarme a quien se ocupa de cobrar?»
 
 ## Anexo C · Maqueta del informe (todos los datos son ficticios)
 
-Es lo que se enseña en el bloque B5. Muestra el resultado que llegaría **solo al dueño o al
-administrativo**. Los nombres, importes y números son inventados y así se rotulan.
+Es lo que se enseña en el bloque B5. **Ya no es una maqueta dibujada: es el resultado real del código**
+(Etapa 1), generado con datos inventados. Muestra lo que llegaría **solo al dueño o al administrativo**.
 
-> **EJEMPLO CON DATOS FICTICIOS**
-> Asunto: Resumen semanal de cobranza · lunes 5 de octubre · 6 facturas vencidas
->
-> **Resumen.** Vencido: $U 412.300 y US$ 3.150 en 6 facturas de 5 clientes.
-> Por antigüedad: 1 a 30 días, 3 facturas · 31 a 60, 2 · 61 a 90, 0 · más de 90, 1.
->
-> **Para revisar y enviar (tú decides, el sistema no envía nada a tus clientes).**
-> Se muestran 3 de las 6 filas:
->
-> | # | Cliente (ficticio) | Factura | Importe | Vence | Atraso | Sugerencia |
-> |---|---|---|---|---|---|---|
-> | 1 | Cliente Uno S.R.L. | A 1001 | $U 85.000 | 25/09 | 10 días | Recordatorio amable |
-> | 2 | Cliente Dos S.A. | A 0987 | US$ 3.150 | 10/09 | 25 días | Segundo aviso |
-> | 3 | Cliente Tres Ltda. | A 0944 | $U 61.300 | 30/06 | 97 días | Aviso firme o llamada |
->
-> **Borrador para la fila 1** (copia el texto o pulsa el botón):
-> «Hola, te escribo de [tu empresa] para recordarte la factura A 1001 por $U 85.000, con vencimiento
-> el 25/09. Si ya la pagaste, ignora este mensaje. Cualquier duda, estoy a tu disposición.»
-> [Copiar] · [Abrir WhatsApp] · [Abrir correo]
->
-> *Este informe se generó a partir de la planilla del 5/10. Si algo no cuadra, responde a este
-> correo antes de usarlo.*
+| Qué mostrar | Dónde está |
+|---|---|
+| **El informe**, en pantalla (se abre en cualquier navegador, también en el móvil, sin conexión) | [`nucleo/demo/informe-demo.html`](../nucleo/demo/informe-demo.html) |
+| **El correo que lo acompaña**: solo totales y un enlace, sin nombres ni facturas | [`nucleo/demo/correo-demo.txt`](../nucleo/demo/correo-demo.txt) |
+| Ejemplos de exportaciones en cuatro formatos distintos, para preguntar «¿la suya se parece a alguna?» | [`nucleo/datos-ficticios/ejemplos/`](../nucleo/datos-ficticios/ejemplos/) |
 
-Notas de diseño de la maqueta: sin amenazas ni referencias a informes comerciales o a acciones
-legales en los borradores; la sugerencia se calcula solo con los días de atraso, **no puntúa ni
-perfila al deudor** (ver documento 03, sección 7).
+Qué se ve: un resumen de lo vencido por moneda (nunca se mezclan pesos y dólares), una tabla por
+antigüedad (1 a 30, 31 a 60, 61 a 90 y más de 90 días), y una tarjeta por factura con el cliente, el
+atraso, la sugerencia (recordatorio amable, segundo aviso, aviso firme o «en disputa: sin borrador»)
+y un **borrador de mensaje** de tono formal y en plural, por ejemplo:
+
+> «Estimados: Les escribimos de [su empresa] para recordarles que la factura A 1001 por $U 85.000,
+> con vencimiento el 25/09/2026, figura pendiente de pago. Si ya fue abonada, les pedimos disculpas
+> y que ignoren este mensaje. Quedamos a su disposición para cualquier consulta.»
+
+En el informe real hay botones para abrir WhatsApp o el correo **del propio dueño** con el texto ya
+escrito; en la demostración están apagados (rotulados «los botones no abren nada»).
+
+Notas de diseño: sin amenazas ni referencias a informes comerciales o a acciones legales en los
+borradores (una prueba automática lo comprueba en cada plantilla); la sugerencia se calcula solo con
+los días de atraso y la marca «en disputa» que ponga el cliente, **no puntúa ni perfila al deudor**
+(ver documento 03, sección 7).
