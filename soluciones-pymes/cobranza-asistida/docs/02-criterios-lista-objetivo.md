@@ -1,6 +1,6 @@
 # Criterios para armar la lista de empresas objetivo · Uruguay
 
-**Estado:** borrador para el Punto de control 2 (diseño) · 29-sep-2026 · ajustado el 30-sep-2026 para 15 entrevistas
+**Estado:** borrador para el Punto de control 2 (diseño) · 29-sep-2026 · ajustado el 30-sep-2026 para 15 entrevistas y sin contactos previos
 **No se ha armado ninguna lista.** Este documento fija las reglas; buscar empresas reales empieza
 solo cuando las apruebes. **No se ha contactado a nadie.**
 **Documentos hermanos:** [plan de entrevistas](01-plan-validacion.md) · [arquitectura en n8n](03-arquitectura-n8n.md)
@@ -126,6 +126,7 @@ La plantilla es [`plantillas/lista-objetivo.csv`](../plantillas/lista-objetivo.c
 | Campo | Regla |
 |---|---|
 | `id_lista` | Identificador interno correlativo (`L001`…). No deriva de ningún dato de la empresa. |
+| `tipo_organizacion` | `empresa` (pyme B2B), `contador` (estudio o profesional que atiende pymes) o `camara_evento` (gremial, cámara o evento donde conocer gente). Los contadores se puntúan con los mismos criterios de fuente y canal; su ajuste es «atiende pymes que facturan a crédito». |
 | `razon_social`, `nombre_fantasia`, `rut_si_es_publico`, `sitio_web`, `ciudad_departamento` | Datos de la empresa tal como los publica. El RUT solo si figura en su web o directorio. |
 | `sector`, `personas_aprox`, `base_tamano` | Estimación y **en qué se basó**. |
 | `senal_credito_b2b`, `fuente_credito_url` | La señal concreta de venta a crédito y dónde se vio. |
@@ -164,8 +165,8 @@ Aplica a cada mensaje que envíes, sea correo o LinkedIn.
    después; nunca más de 5 en un día. Los referidos, los eventos y los mensajes 1 a 1 de LinkedIn
    **no cuentan** en ese tope. Sales desde una cuenta Gmail personal sin dominio propio ni
    SPF/DKIM: la reputación se cuida con pocos mensajes bien dirigidos, no con el límite de Gmail
-   (500 al día). Con 15 entrevistas por conseguir, el correo en frío no basta: el plan depende de la
-   red personal y de los contadores.
+   (500 al día). Sin contactos previos y con 15 entrevistas por conseguir, el correo en frío no basta: el
+   plan depende de los contadores, los eventos, LinkedIn y la bola de nieve.
 9. **Teléfono y WhatsApp:** no en frío en esta fase (recuadro del
    [plan de entrevistas](01-plan-validacion.md#4-cómo-llegar-a-ellos-por-orden-de-preferencia)).
    Cuando se use: consultar el registro «No llame» (previa inscripción en la URSEC), conservar la

@@ -1,7 +1,7 @@
 # Arquitectura modular base en n8n · Cobranza asistida
 
 **Estado:** diseño para el Punto de control 2 · 29-sep-2026 · **actualizado el 30-sep-2026**: Etapa 1 autorizada,
-banco de pruebas autorizado *si* la instancia es la de Oracle, y Oracle está en **São Paulo**.
+n8n confirmado como tu servidor de Oracle y autorizado como banco de pruebas (solo datos ficticios), y Oracle está en **São Paulo**.
 **No se ha construido, activado ni ejecutado nada.** No se creó ningún workflow, credencial ni tabla en
 tu n8n y no se envió ningún correo. Este documento es el diseño; el desarrollo espera tu OK.
 **Documentos hermanos:** [plan de entrevistas](01-plan-validacion.md) · [criterios de la lista](02-criterios-lista-objetivo.md)
@@ -214,7 +214,8 @@ tramos y número de filas apartadas.
   tratamiento de datos de solvencia crediticia. La v1 se queda en un cálculo objetivo (días de
   atraso). **Mi lectura:** aun así conviene documentar una evaluación de impacto ligera antes de
   usar datos reales.
-- **Tono de los borradores:** cortés. Sin amenazas y sin mención de informes comerciales, acciones
+- **Tono de los borradores:** por defecto **formal en plural** («Estimados: les recordamos…», decisión del 30-sep;
+  cada cliente puede cambiarlo). Cortés. Sin amenazas y sin mención de informes comerciales, acciones
   legales o consecuencias. Una prueba busca esas expresiones en todas las plantillas.
 - **Borradores válidos o ninguno:** una plantilla con una llave sin resolver o un dato
   obligatorio vacío bloquea el borrador (como en RecordaCitas). La fecha y el importe nunca se
@@ -315,18 +316,18 @@ vulneración (Decreto 64/020 art. 4). La redacción del contrato conviene revisa
 
 ### 10.1 Entornos
 
-- **Pruebas (DEV):** una instancia donde **solo** hay datos ficticios. El 30-sep autorizaste usar como
-  banco de pruebas la instancia conectada **si es la de Oracle**; falta confirmar que lo es (ver abajo).
-  Nada activo, todo con prefijo `[COB-DEV]`.
+- **Pruebas (DEV):** una instancia donde **solo** hay datos ficticios. El 30-sep confirmaste que la
+  instancia conectada es tu servidor de Oracle y autorizaste usarla como banco de pruebas. Nada activo,
+  todo con prefijo `[COB-DEV]`. Se usa desde la Etapa 2, con tu OK para arrancarla.
 - **Producción (PROD):** instancia endurecida (10.7), sin cursos ni experimentos, con datos reales
   únicamente después de contrato, unipersonal y las decisiones de 10.2 a 10.5.
 
 **Lo que vi de tu n8n (solo lectura, sin cambiar nada).** Tres workflows inactivos de cursos
 («Gestor de Redes Sociales», «HOLA MUNDO N8N» y «Section 1 - Academy Registration»), una credencial
 («n8n Academy API Key», de tipo cabecera HTTP) y ninguna tabla de datos. No hay credenciales de
-Google. Las señales (sin proyectos de equipo y sin créditos de *gateway*, el servicio gestionado de
-n8n Cloud) son compatibles con una instalación propia, pero **no prueban** que sea tu servidor de
-Oracle: falta que lo confirmes. Hasta entonces no se crea nada en ella.
+Google. Las señales que vi (sin proyectos de equipo y sin créditos de *gateway*, el servicio gestionado
+de n8n Cloud) son compatibles con una instalación propia; la confirmación de que es tu servidor de
+Oracle es tuya, del 30-sep. Hasta la Etapa 2 no se crea nada en ella.
 
 ### 10.2 Oracle Cloud Always Free (documentación de Oracle, 29-sep-2026)
 
@@ -502,7 +503,7 @@ transferencia a un Estado sin nivel adecuado para los datos de los deudores. Tam
 |---|---|---|---|
 | **0 · Diseño** | Este documento, el plan de entrevistas y los criterios de la lista. | **Punto de control 2**: revisado el 30-sep-2026 con ajustes (15 entrevistas; Oracle en São Paulo). | Hecho, con las decisiones abiertas de la sección 16. |
 | **1 · Núcleo puro** | Módulos M1 a M5 en JavaScript, generador de datos ficticios, pruebas de los niveles 1 a 6, informe HTML de ejemplo. Todo local en el repositorio: sin n8n, sin datos reales, sin contactar a nadie. | **Autorizada el 30-sep**; arranca cuando resuelvas las preguntas previas. Corre **en paralelo** a las entrevistas y da una demostración realista. | Criterios de salida de la sección 11. |
-| **2 · n8n de pruebas** | Shell y sub-workflows en una instancia de pruebas, datos ficticios, envío solo a tu bandeja; nivel 7. | Autorizada el 30-sep **si la instancia es la de Oracle (São Paulo)**: falta confirmarlo. Credenciales creadas por ti. | Nada activo salvo tus ensayos; **Punto de control 3** con guía manual. |
+| **2 · n8n de pruebas** | Shell y sub-workflows en tu instancia de Oracle (São Paulo) como banco de pruebas, datos ficticios, envío solo a tu bandeja; nivel 7. | Instancia autorizada el 30-sep; **pediré tu OK para arrancar la etapa** al terminar la 1. Credenciales creadas por ti. | Nada activo salvo tus ensayos; **Punto de control 3** con guía manual. |
 | **3 · Sombra** | Datos reales de un cliente que confirmó interés, con informe enmascarado. | Cliente que confirma interés real · **unipersonal en BPS/DGI** antes de tocar sus sistemas o facturar · contrato de encargo · inscripción de la base · **región y transferencias resueltas (São Paulo no vale sin más)** · evaluación de impacto documentada. | El informe coincide con el cálculo manual del cliente varias semanas seguidas. |
 | **4 · Piloto** | Informe real al dueño, en modo `enlace_salida`. | **Punto de control 4** («antes del envío final»): tu autorización expresa. | Un ciclo completo sin incidentes. |
 
@@ -559,7 +560,7 @@ Necesito tu decisión en estos puntos; **hasta entonces no toco nada**.
 
 | # | Decisión | Opciones | Mi recomendación | Estado (30-sep) |
 |---|---|---|---|---|
-| D1 | ¿La instancia de n8n conectada es tu servidor de Oracle? ¿Puedo usarla como **banco de pruebas** con datos ficticios, prefijo `[COB-DEV]` y nada activo? | Sí / No / Otra instancia | Usarla solo como pruebas; PROD separada. | **Respondida con condición:** sí, *si* es la de Oracle. **Falta confirmar que lo es.** |
+| D1 | ¿La instancia de n8n conectada es tu servidor de Oracle? ¿Puedo usarla como **banco de pruebas** con datos ficticios, prefijo `[COB-DEV]` y nada activo? | Sí / No / Otra instancia | Usarla solo como pruebas; PROD separada. | **Respondida: sí, es tu servidor de Oracle (30-sep).** Autorizada como banco de pruebas. |
 | D2 | Alcance inmediato | (a) Solo diseño; (b) empezar la Etapa 1 (núcleo puro, local, sin contactar a nadie) en paralelo a las entrevistas | (b) | **Respondida: (b).** Arranca tras las preguntas previas. |
 | D3 | Canal de entrada | A · Drive con cuenta de servicio · B · buzón · C · manual | A; C para el primer piloto. | Abierta (no bloquea la Etapa 1). |
 | D4 | Modo de entrega con datos reales | `correo_completo` · `enlace_salida` | `enlace_salida` (un destinatario equivocado solo vería totales). | Abierta (no bloquea la Etapa 1). |

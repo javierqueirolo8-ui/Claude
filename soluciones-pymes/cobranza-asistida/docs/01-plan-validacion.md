@@ -1,6 +1,6 @@
 # Plan de entrevistas de validación · Cobranza asistida (Uruguay)
 
-**Estado:** borrador para el Punto de control 2 (diseño) · 29-sep-2026 · **ajustado el 30-sep-2026: 15 entrevistas**
+**Estado:** borrador para el Punto de control 2 (diseño) · 29-sep-2026 · **ajustado el 30-sep-2026: 15 entrevistas y punto de partida sin contactos previos**
 **Nada de este plan se ha ejecutado:** no se ha contactado a nadie, no hay lista real ni entrevistas hechas.
 **Nicho:** cobranza asistida de facturas vencidas · **Plan B:** presupuestos y seguimiento en oficios
 **Documentos hermanos:** [criterios de la lista objetivo](02-criterios-lista-objetivo.md) · [arquitectura en n8n](03-arquitectura-n8n.md)
@@ -72,8 +72,10 @@ construcción y subcontratistas, industria liviana, insumos agropecuarios y méd
   estudios contables** que atienden pymes: ven la cartera de muchas empresas y son un canal de
   referencia. Su evidencia es **indirecta** (hablan de sus clientes): cuenta, pero se anota aparte
   en la columna `rol`.
-- Las de calibración (red cercana) sirven para ensayar el guion y **no cuentan** como evidencia:
-  la cortesía de un conocido contamina la señal.
+- Las de calibración sirven para ensayar el guion y **no cuentan** como evidencia. Como hoy no hay
+  contactos previos, el guion se ensaya primero en voz alta con cualquier persona (aunque no sea de
+  una pyme) y **las 2 o 3 primeras entrevistas reales cuentan como calibración** si después el guion
+  cambia de forma importante; si casi no cambia, se cuentan.
 
 **Se excluyen** del conteo: familiares y amigos cercanos, comercios que cobran al contado, empresas
 del Estado, competidores directos y empresas de las que se espera ya una venta.
@@ -82,13 +84,19 @@ del Estado, competidores directos y empresas de las que se espera ya una venta.
 
 ## 4. Cómo llegar a ellos (por orden de preferencia)
 
+**Punto de partida (30-sep-2026): no hay contactos previos.** Tú lo confirmaste con un «0» a la pregunta de
+cuántas empresas que facturan a crédito puedes alcanzar por conocidos o por un contador de confianza. Es
+coherente con lo que dijiste al principio (el contacto será en frío) y cambia el plan: las presentaciones
+no son el punto de partida sino un **resultado** de las primeras entrevistas.
+
 | # | Canal | Regla |
 |---|---|---|
-| 1 | **Red personal y referidos**: «¿a quién conoces a quien le pase esto?» | Mejor respuesta y sin fricción legal. Pedir que la persona presente o pida permiso. |
-| 2 | **Contadores y estudios contables** | Que presenten a dos o tres clientes suyos. Nunca pedir listados de clientes. |
-| 3 | **Eventos y comunidades** (cámaras, jornadas de ANDE, coworkings, meetups) | Presencial, tarjeta y conversación. |
-| 4 | **LinkedIn**, mensaje 1 a 1 escrito a mano | Sin automatizar ni extraer datos: el [Acuerdo de Usuario](https://www.linkedin.com/legal/user-agreement) lo prohíbe. |
-| 5 | **Correo** a una dirección que **la propia empresa publica** para contacto | Solo con el protocolo de la sección 6 del documento 02 (identidad, motivo, fuente del dato, baja). Volumen bajo. |
+| 1 | **Contadores y estudios contables** (palanca principal) | Un solo contador conoce a decenas de pymes. Se les pide una conversación de 20 minutos sobre cómo cobran sus clientes y, si les parece útil, que presenten a dos o tres. Nunca pedir listados de clientes. Su evidencia es indirecta y se anota aparte. |
+| 2 | **Eventos y comunidades** (cámaras, jornadas de ANDE, coworkings, meetups) | Presencial, tarjeta y conversación. Suele tener la mejor aceptación, a costa de tu tiempo. |
+| 3 | **LinkedIn**, mensaje 1 a 1 escrito a mano | Sin automatizar ni extraer datos: el [Acuerdo de Usuario](https://www.linkedin.com/legal/user-agreement) lo prohíbe. |
+| 4 | **Correo** a una dirección que **la propia empresa publica** para contacto | Solo con el protocolo de la sección 6 del documento 02 (identidad, motivo, fuente del dato, baja). Tope de 10 por semana: **no basta por sí solo** (ver tabla de la sección 9). |
+| 5 | **Bola de nieve** | Al cerrar **cada** entrevista se piden dos presentaciones. Con permiso de quien presenta; es el canal que más crece con el tiempo. |
+| 6 | **Contenido propio** (opcional) | Publicaciones breves sobre el costo de cobrar tarde para que sean los interesados quienes escriban. Quien escribe primero da su consentimiento. Es un trabajo aparte que no se construye sin tu OK. |
 | — | **Teléfono o WhatsApp en frío** | **No en esta fase.** Ver recuadro. |
 
 > **Por qué no llamar ni escribir por WhatsApp en frío todavía.**
@@ -220,10 +228,14 @@ puede ocultar que casi nadie contestó.
 
 | Semana | Trabajo | Requiere tu OK |
 |---|---|---|
-| 0 | Aprobar este plan, el guion y los mensajes. Fijar `[P]` y `[N]`. Preparar registros fuera del repositorio. Consultar a la URCDP por la inscripción de la base (documento 02, sección 9). Armar la primera lista de 20 (documento 02). | Sí, todo. |
-| 1 | 2 o 3 entrevistas de calibración con red cercana. Ajustar el guion. | Cada contacto, antes. |
-| 2 a 6 | 15 entrevistas, unas 3 por semana. Síntesis de 30 minutos cada semana. Ajustar la lista según lo aprendido. | Cada tanda de contactos, antes. |
-| 7 | Síntesis final y decisión según la sección 8. Si sale AMPLIAR: 2 semanas más para 5 entrevistas. | Sí. |
+| 0 | Aprobar este plan, el guion y los mensajes. Fijar `[P]` y `[N]`. Preparar registros fuera del repositorio. Consultar a la URCDP por la inscripción de la base (documento 02, sección 9). Armar la primera lista de 20, con **contadores y empresas** (documento 02). Ensayar el guion en voz alta. | Sí, todo. |
+| 1 a 3 | Primeros contactos: contadores, eventos y LinkedIn; correo a direcciones públicas dentro del tope. Primeras 2 o 3 entrevistas (calibración). | Cada contacto, antes. |
+| 4 a 9 | 15 entrevistas, unas 2 o 3 por semana. Síntesis de 30 minutos cada semana. Bola de nieve al cierre de cada una. Ajustar la lista según lo aprendido. | Cada tanda de contactos, antes. |
+| 10 | Síntesis final y decisión según la sección 8. Si sale AMPLIAR: 2 a 3 semanas más para 5 entrevistas. | Sí. |
+
+**Puntos de control de alcance.** Fin de la semana 4: al menos 5 entrevistas hechas o agendadas. Fin de la
+semana 6: al menos 8 hechas. Fin de la semana 8: al menos 12. Si un punto no se cumple, se replantean los
+canales antes de bajar la muestra.
 
 **Cuántas invitaciones hacen falta.** Para 15 entrevistas completas hay que invitar a bastantes más
 personas. Son **escenarios, no datos**: no tengo una tasa de respuesta verificable para Uruguay.
@@ -235,11 +247,13 @@ personas. Son **escenarios, no datos**: no tengo una tasa de respuesta verificab
 | 15 % | 100 |
 | 8 % (correo en frío a direcciones públicas) | 188 |
 
-Con esos números, **la red personal y los contadores son lo que hace viable el plan**: el correo en
-frío, limitado a 10 por semana, no alcanza para 15 entrevistas en 5 semanas (documento 02, sección 6).
+Con esos números, **el correo en frío no puede sostener el plan**: con un tope de 10 por semana y una
+aceptación del 8 %, harían falta unas 19 semanas para 15 entrevistas. Los contadores, los eventos, LinkedIn y
+la bola de nieve tienen que aportar la mayoría (documento 02, sección 6).
 
 **Tiempo estimado (orden de magnitud):** unos 90 minutos por entrevista completa entre invitación,
 conversación de 30 minutos y notas, es decir, unas **22 horas** para las 15, sin contar la calibración.
+Sin contactos previos, la captación pesa más: cuenta con **el doble** hasta que la bola de nieve funcione.
 
 ---
 
@@ -254,7 +268,7 @@ conversación de 30 minutos y notas, es decir, unas **22 horas** para las 15, si
 | Recoger datos de terceros sin necesidad. | No anotar nombres de deudores; códigos `E01`; ficheros fuera del repositorio. |
 | Reputación del remitente (Gmail sin dominio propio). | Pocos mensajes a mano, sin adjuntos ni seguimiento de aperturas; ver documento 02. |
 | Confundir interés con compra. | Solo N4 y N5 cuentan como interés real. |
-| No llegar a 15 entrevistas por falta de respuesta. | Priorizar referidos y contadores; registrar la tasa de respuesta desde la primera semana; si a la semana 4 hay menos de 8 hechas, replantear canales antes de bajar la muestra. |
+| No llegar a 15 entrevistas por falta de respuesta (sin contactos previos). | Contadores como palanca, eventos, LinkedIn y bola de nieve; registrar la tasa de respuesta desde la primera semana; puntos de control de alcance en las semanas 4, 6 y 8. |
 
 ---
 
@@ -306,6 +320,10 @@ La marca todavía no está definida; hasta que exista la unipersonal firmas con 
 > Hola [nombre], soy Javier Queirolo, consultor independiente. Estoy investigando cómo las pymes
 > uruguayas gestionan facturas vencidas. ¿Aceptarías 25 minutos de charla, sin venta? Si no, sin
 > problema.
+
+**Ofrecer algo a cambio (opcional, decisión tuya).** Al no tener relación previa, puede ayudar añadir a A2 y A3
+una frase como «a cambio te comparto un resumen anónimo de lo que aprenda en el sector». No promete nada
+que no puedas cumplir y no compromete datos de nadie.
 
 **Reglas comunes.** Sin adjuntos, sin imágenes ni enlaces de seguimiento, en texto plano. Un solo
 recordatorio a los 7 días como máximo; si no hay respuesta, se cierra el contacto y no se vuelve a
