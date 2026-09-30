@@ -1,7 +1,8 @@
 # Cobranza asistida de facturas vencidas · Uruguay
 
-**Estado: diseño, para el Punto de control 2.** No se ha construido, activado ni ejecutado nada, no
-se ha tocado producción y **no se ha contactado a nadie**.
+**Estado (30-sep-2026): diseño ajustado; Etapa 1 autorizada, pendiente de arrancar.** Ajustes pedidos
+aplicados: **15 entrevistas** para decidir la viabilidad y Oracle en **São Paulo**. No se ha construido,
+activado ni ejecutado nada, no se ha tocado producción y **no se ha contactado a nadie**.
 
 Servicio para pymes uruguayas que **facturan a crédito a otras empresas** y pierden caja y tiempo
 porque nadie reclama a tiempo. Cada semana, a partir de una exportación que el propio cliente deja
@@ -52,7 +53,7 @@ deudor.
 | # | Punto | Estado |
 |---|---|---|
 | 1 | Tras la investigación de nichos | Hecho: nicho 1 elegido, Uruguay, RecordaCitas archivado. |
-| 2 | **Tras el diseño** | **En revisión** (estos documentos). Decisiones pendientes en la [sección 16 del documento 03](docs/03-arquitectura-n8n.md#16-decisiones-abiertas). |
+| 2 | **Tras el diseño** | **Revisado con ajustes** (15 entrevistas; Oracle en São Paulo). Etapa 1 autorizada. Decisiones abiertas en la [sección 16 del documento 03](docs/03-arquitectura-n8n.md#16-decisiones-abiertas). |
 | 3 | Tras el desarrollo | Pendiente. Incluirá la guía de verificación manual para no técnicos. |
 | 4 | Antes del envío final | Pendiente. |
 

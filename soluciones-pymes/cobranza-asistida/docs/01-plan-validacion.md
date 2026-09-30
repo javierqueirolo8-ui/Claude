@@ -1,6 +1,6 @@
 # Plan de entrevistas de validación · Cobranza asistida (Uruguay)
 
-**Estado:** borrador para el Punto de control 2 (diseño) · 29-sep-2026
+**Estado:** borrador para el Punto de control 2 (diseño) · 29-sep-2026 · **ajustado el 30-sep-2026: 15 entrevistas**
 **Nada de este plan se ha ejecutado:** no se ha contactado a nadie, no hay lista real ni entrevistas hechas.
 **Nicho:** cobranza asistida de facturas vencidas · **Plan B:** presupuestos y seguimiento en oficios
 **Documentos hermanos:** [criterios de la lista objetivo](02-criterios-lista-objetivo.md) · [arquitectura en n8n](03-arquitectura-n8n.md)
@@ -66,10 +66,12 @@ suele tener sistema y un área de créditos.
 mayoristas, servicios B2B (mantenimiento, TI, imprenta y publicidad, transporte y logística),
 construcción y subcontratistas, industria liviana, insumos agropecuarios y médicos.
 
-**Cuotas.** 10 entrevistas completas más 2 o 3 de calibración.
-- Máximo 3 por sector; mezcla de tamaños.
-- Al menos 2 personas **administrativas** (quien realmente cobra) y 2 **contadores o estudios
-  contables** que atienden pymes: ven la cartera de muchas empresas y son un canal de referencia.
+**Cuotas.** **15 entrevistas completas** que cuentan como evidencia, más 2 o 3 de calibración que no cuentan.
+- Al menos 3 sectores distintos y como máximo 4 entrevistas por sector; mezcla de tamaños.
+- Al menos 3 personas **administrativas** (quien realmente cobra) y como máximo 3 **contadores o
+  estudios contables** que atienden pymes: ven la cartera de muchas empresas y son un canal de
+  referencia. Su evidencia es **indirecta** (hablan de sus clientes): cuenta, pero se anota aparte
+  en la columna `rol`.
 - Las de calibración (red cercana) sirven para ensayar el guion y **no cuentan** como evidencia:
   la cortesía de un conocido contamina la señal.
 
@@ -177,16 +179,33 @@ el máximo alcanzable en esta fase es N5 como compromiso escrito, no como pago.
 ## 8. Reglas de decisión, fijadas antes de empezar
 
 Fijarlas antes evita interpretar los resultados a favor de la idea. **Son mi propuesta y se pueden
-ajustar ahora; después no.** Con 10 entrevistas no hay significación estadística: el método sirve
-para **descartar ideas malas**, no para probar que una es buena.
+ajustar ahora; después no.** Con 15 entrevistas sigue sin haber significación estadística, aunque
+menos débil que con 10: si en 9 de 15 aparece el dolor (60 %), el intervalo de confianza al 95 %
+(Wilson) va aproximadamente del **36 % al 80 %**. El método sirve para **descartar ideas malas**, no para
+probar que una es buena.
 
-| Resultado | Condición sobre 10 entrevistas completas | Qué se hace |
-|---|---|---|
-| **GO** | H1 en 6 o más **y** H2 en 5 o más **y** H5 con nivel N3 o superior en 4 o más **y** al menos 2 en N4 o N5. | Preparar el piloto. Cuando **un** cliente confirme interés real, iniciar BPS/DGI **antes** de tocar sus sistemas o facturar, más contrato y registro de la base de datos. |
-| **AJUSTAR** | H1 sí, pero H2 o H3 flojos (ya tienen proceso o el atraso es por disputas). | Cambiar el alcance: un solo sector, o priorizar otra parte del proceso. Volver a validar. |
-| **PLAN B** | H1 en 6 o más, pero H5 en N3 o superior en 2 o menos. | Decidir juntos: nicho 3 (presupuestos en oficios) o una variante en la que **los datos no salen de la empresa** (ver documento 03, sección 12). |
-| **DESCARTAR** | H1 en 3 o menos. | Volver a la lista de nichos. |
-| **AMPLIAR** | Cualquier caso intermedio (por ejemplo H1 en 4 o 5). | 5 entrevistas más antes de decidir. |
+Los umbrales conservan las proporciones del plan de 10 (60 %, 50 %, 40 % y 20 %) y se redondean
+siempre hacia el lado más exigente: para dar el GO, hacia arriba (H2: 7,5 pasa a 8); para descartar,
+hacia abajo (H1: 4,5 pasa a 4). Se evalúan **en este orden** y decide la primera que se cumple.
+
+| # | Resultado | Condición sobre las 15 entrevistas completas | Qué se hace |
+|---|---|---|---|
+| 1 | **DESCARTAR** | H1 en 4 o menos. | Volver a la lista de nichos. |
+| 2 | **PLAN B** | H1 en 9 o más, pero H5 con nivel N3 o superior en 3 o menos. | Decidir juntos: nicho 3 (presupuestos en oficios) o una variante en la que **los datos no salen de la empresa** (ver documento 03, sección 12). |
+| 3 | **GO** | H1 en 9 o más **y** H2 en 8 o más **y** H5 con nivel N3 o superior en 6 o más **y** al menos 3 en N4 o N5 **y** se cumple el criterio económico de abajo. | Preparar el piloto. Cuando **un** cliente confirme interés real, iniciar BPS/DGI **antes** de tocar sus sistemas o facturar, más contrato y registro de la base de datos. |
+| 4 | **AJUSTAR** | H1 en 9 o más y H5 con nivel N3 o superior en 6 o más, pero H2 en 7 o menos (ya tienen proceso), o menos de 3 en N4 o N5 (nadie se compromete), o no se cumple el criterio económico. H3 orienta **cómo** ajustar. | Cambiar el alcance: un solo sector, otra parte del proceso u otro precio. Volver a validar. |
+| 5 | **AMPLIAR** | Cualquier caso intermedio: H1 entre 5 y 8, o H1 en 9 o más con H5 con nivel N3 o superior en 4 o 5. | 5 entrevistas más, **una sola vez**. Después se decide con lo que haya. |
+
+**Criterio económico de viabilidad (lo defines tú antes de empezar).** Una idea puede tener dolor y datos
+compartibles y aun así no ser un negocio. Antes de la primera entrevista hay que fijar:
+- `[P]`: la cuota mensual mínima por cliente con la que el servicio te sirve. **Por definir.**
+- `[N]`: cuántos clientes de pago necesitas para que el proyecto valga la pena. **Por definir.**
+
+El criterio se cumple cuando al menos **4 de las 15** entrevistas (propuesta) dan un rango de precio que
+llega a `[P]`: H7, con una cifra propia o comparada con lo que ya gastan o pierden, no un «me parece
+bien». `[N]` no se puede probar con 15 entrevistas; sirve después para dimensionar el esfuerzo comercial
+a partir de la proporción de empresas candidatas que salga de ellas. Hasta que fijes `[P]` y `[N]`, la fila
+GO no puede activarse.
 
 ---
 
@@ -201,10 +220,26 @@ puede ocultar que casi nadie contestó.
 
 | Semana | Trabajo | Requiere tu OK |
 |---|---|---|
-| 0 | Aprobar este plan, el guion y los mensajes. Preparar registros fuera del repositorio. Consultar a la URCDP por la inscripción de la base (documento 02, sección 9). Armar la primera lista de 15 (documento 02). | Sí, todo. |
+| 0 | Aprobar este plan, el guion y los mensajes. Fijar `[P]` y `[N]`. Preparar registros fuera del repositorio. Consultar a la URCDP por la inscripción de la base (documento 02, sección 9). Armar la primera lista de 20 (documento 02). | Sí, todo. |
 | 1 | 2 o 3 entrevistas de calibración con red cercana. Ajustar el guion. | Cada contacto, antes. |
-| 2 a 4 | 8 a 10 entrevistas. Síntesis de 30 minutos cada semana. Ajustar la lista según lo aprendido. | Cada tanda de contactos, antes. |
-| 5 | Síntesis final y decisión según la sección 8. | Sí. |
+| 2 a 6 | 15 entrevistas, unas 3 por semana. Síntesis de 30 minutos cada semana. Ajustar la lista según lo aprendido. | Cada tanda de contactos, antes. |
+| 7 | Síntesis final y decisión según la sección 8. Si sale AMPLIAR: 2 semanas más para 5 entrevistas. | Sí. |
+
+**Cuántas invitaciones hacen falta.** Para 15 entrevistas completas hay que invitar a bastantes más
+personas. Son **escenarios, no datos**: no tengo una tasa de respuesta verificable para Uruguay.
+
+| Aceptación supuesta | Invitaciones necesarias |
+|---|---|
+| 40 % (referidos cálidos) | 38 |
+| 25 % | 60 |
+| 15 % | 100 |
+| 8 % (correo en frío a direcciones públicas) | 188 |
+
+Con esos números, **la red personal y los contadores son lo que hace viable el plan**: el correo en
+frío, limitado a 10 por semana, no alcanza para 15 entrevistas en 5 semanas (documento 02, sección 6).
+
+**Tiempo estimado (orden de magnitud):** unos 90 minutos por entrevista completa entre invitación,
+conversación de 30 minutos y notas, es decir, unas **22 horas** para las 15, sin contar la calibración.
 
 ---
 
@@ -219,6 +254,7 @@ puede ocultar que casi nadie contestó.
 | Recoger datos de terceros sin necesidad. | No anotar nombres de deudores; códigos `E01`; ficheros fuera del repositorio. |
 | Reputación del remitente (Gmail sin dominio propio). | Pocos mensajes a mano, sin adjuntos ni seguimiento de aperturas; ver documento 02. |
 | Confundir interés con compra. | Solo N4 y N5 cuentan como interés real. |
+| No llegar a 15 entrevistas por falta de respuesta. | Priorizar referidos y contadores; registrar la tasa de respuesta desde la primera semana; si a la semana 4 hay menos de 8 hechas, replantear canales antes de bajar la muestra. |
 
 ---
 

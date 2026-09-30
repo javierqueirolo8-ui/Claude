@@ -1,6 +1,7 @@
 # Arquitectura modular base en n8n · Cobranza asistida
 
-**Estado:** diseño para el Punto de control 2 · 29-sep-2026
+**Estado:** diseño para el Punto de control 2 · 29-sep-2026 · **actualizado el 30-sep-2026**: Etapa 1 autorizada,
+banco de pruebas autorizado *si* la instancia es la de Oracle, y Oracle está en **São Paulo**.
 **No se ha construido, activado ni ejecutado nada.** No se creó ningún workflow, credencial ni tabla en
 tu n8n y no se envió ningún correo. Este documento es el diseño; el desarrollo espera tu OK.
 **Documentos hermanos:** [plan de entrevistas](01-plan-validacion.md) · [criterios de la lista](02-criterios-lista-objetivo.md)
@@ -279,7 +280,7 @@ vulneración (Decreto 64/020 art. 4). La redacción del contrato conviene revisa
 | Ley 18.331 art. 12; Decreto 64/020 arts. 5, 8 y 9 | Responsabilidad proactiva; privacidad **por diseño y por defecto**: minimizar, seudonimizar, definir retención, planes de contingencia; documentar. | Columnas permitidas por cliente (lo demás se descarta al leer); sin estado por factura; libro sin datos personales; este documento como constancia; runbook de incidentes. |
 | Ley 18.331 art. 30 | Uso solo para el fin del contrato; no ceder ni conservar; destruir al terminar. | Aislamiento por cliente; sin tablas compartidas de deudores; borrado al fin del contrato. |
 | Decreto 64/020 arts. 3 y 4 | Medidas técnicas; actuar sobre incidentes en las primeras 24 horas; el responsable avisa a la URCDP en 72 horas; el encargado avisa **de inmediato** al responsable. | Runbook (9.4). |
-| Decreto 64/020 art. 6 | Evaluación de impacto si hay perfilado de situación económica, o si se transfieren datos a Estados sin nivel adecuado. | Sin perfilado; región dentro de la lista de la URCDP; evaluación ligera documentada antes de datos reales. |
+| Decreto 64/020 art. 6 | Evaluación de impacto **previa** si hay perfilado de situación económica, o si se transfieren datos personales a Estados sin nivel adecuado (literal f). | Sin perfilado. **Con un servidor en São Paulo (Brasil, fuera de la lista) la evaluación es obligatoria antes de datos reales**, salvo que la producción vaya a una región adecuada. |
 | Ley 18.331 art. 23; URCDP Res. 23/021 y 63/023 | Transferencia internacional solo a países adecuados o con garantías. | Sección 10.3. |
 | Ley 18.331 arts. 6 y 29 | Toda base de datos debe inscribirse. | Consultar a la URCDP si el libro o las notas de piloto exigen inscripción; el trámite es gratuito. |
 | Ley 18.331 art. 9-bis, 21 | Fuentes públicas y prospección. | Documento 02 (no se usan datos de clientes para prospectar). |
@@ -314,15 +315,18 @@ vulneración (Decreto 64/020 art. 4). La redacción del contrato conviene revisa
 
 ### 10.1 Entornos
 
-- **Pruebas (DEV):** una instancia donde **solo** hay datos ficticios. Puede ser la que ya tienes
-  conectada, si aceptas usarla así (sección 16). Nada activo, todo con prefijo `[COB-DEV]`.
+- **Pruebas (DEV):** una instancia donde **solo** hay datos ficticios. El 30-sep autorizaste usar como
+  banco de pruebas la instancia conectada **si es la de Oracle**; falta confirmar que lo es (ver abajo).
+  Nada activo, todo con prefijo `[COB-DEV]`.
 - **Producción (PROD):** instancia endurecida (10.7), sin cursos ni experimentos, con datos reales
   únicamente después de contrato, unipersonal y las decisiones de 10.2 a 10.5.
 
 **Lo que vi de tu n8n (solo lectura, sin cambiar nada).** Tres workflows inactivos de cursos
 («Gestor de Redes Sociales», «HOLA MUNDO N8N» y «Section 1 - Academy Registration»), una credencial
 («n8n Academy API Key», de tipo cabecera HTTP) y ninguna tabla de datos. No hay credenciales de
-Google. No puedo saber desde aquí si es tu servidor de Oracle o una instancia de aprendizaje.
+Google. Las señales (sin proyectos de equipo y sin créditos de *gateway*, el servicio gestionado de
+n8n Cloud) son compatibles con una instalación propia, pero **no prueban** que sea tu servidor de
+Oracle: falta que lo confirmes. Hasta entonces no se crea nada en ella.
 
 ### 10.2 Oracle Cloud Always Free (documentación de Oracle, 29-sep-2026)
 
@@ -331,7 +335,8 @@ Google. No puedo saber desde aquí si es tu servidor de Oracle o una instancia d
 - **Recuperación de instancias inactivas:** Oracle puede reclamar una instancia si durante 7 días el
   percentil 95 de CPU es inferior al 20 %, la red es inferior al 20 % y (solo en A1) la memoria es
   inferior al 20 %. Un n8n que solo despierta una vez al día puede caer en esa definición.
-- Las instancias Always Free **deben crearse en la región de origen** de la cuenta.
+- Las instancias Always Free **deben crearse en la región de origen** de la cuenta. La tuya es **São Paulo**
+  (Brasil): ver las consecuencias para datos reales en 10.3.
 - El puerto 25 saliente está bloqueado por defecto: el envío SMTP debe usar 465 o 587.
 - La página **no menciona un acuerdo de nivel de servicio**. Oracle dice que tras pasar a *Pay As You
   Go* no cobra por los recursos Always Free; **no verifiqué** si esa mejora evita la recuperación por
@@ -352,8 +357,34 @@ Brasil y Chile **no figuran** en esa lista. Si el servidor está en una región 
 hacen falta las excepciones del art. 23 o garantías contractuales autorizadas por la URCDP.
 La URCDP publicó una guía para redactar cláusulas
 ([Res. 41/021](https://www.gub.uy/unidad-reguladora-control-datos-personales/institucional/normativa/resolucion-n-41021)).
-**Pendiente tuyo:** ¿en qué región está tu cuenta de Oracle? Y la lista puede haber cambiado desde
-la Res. 63/023 (nov-2023): compruébalo en el sitio de la URCDP antes de decidir.
+**Tu cuenta de Oracle está en São Paulo (dato del 30-sep).** Brasil **no figura** en la lista de la URCDP,
+así que, para datos personales reales, alojar allí es una transferencia a un Estado sin nivel adecuado.
+Consecuencias:
+
+- **Con datos ficticios no hay problema**: Oracle en São Paulo sirve como banco de pruebas.
+- **Con datos reales** hace falta una excepción del art. 23 o la autorización de la URCDP con garantías
+  contractuales, y la evaluación de impacto pasa a ser **obligatoria antes de empezar** (Decreto 64/020
+  art. 6, literal f). Cuenta la transmisión, no solo el almacenamiento: tratar los datos en memoria en
+  un servidor de São Paulo también es transferirlos ([Res. 23/021](https://www.gub.uy/unidad-reguladora-control-datos-personales/institucional/normativa/resolucion-n-23021),
+  considerando I).
+- El art. 23 permite transferir con el consentimiento inequívoco del titular o cuando sea necesario para
+  ejecutar un contrato con el titular. Aquí los titulares son los **deudores** del cliente: no es
+  práctico recabar su consentimiento y el segundo caso es una lectura forzada. **No lo daría por bueno
+  sin un abogado.**
+
+Opciones para producción, a decidir **antes de la Etapa 3** (D6):
+
+1. **Servidor de producción en una región adecuada** (UE, Reino Unido, etc.). **No verifiqué** si Oracle
+   permite crear servidores de pago en otras regiones desde tu cuenta, si la región de origen puede
+   cambiarse, ni sus condiciones para abrir otra cuenta.
+2. **Pedir a la URCDP la autorización** para transferir a Brasil con cláusulas contractuales (guía de la
+   [Res. 41/021](https://www.gub.uy/unidad-reguladora-control-datos-personales/institucional/normativa/resolucion-n-41021)).
+   Plazo y costo: desconocidos.
+3. **Variante local** (sección 12): los datos de los deudores no salen del cliente.
+4. **Otro proveedor** con región adecuada.
+
+La lista de la URCDP puede haber cambiado desde la Res. 63/023 (nov-2023): compruébalo en su sitio antes de
+decidir.
 
 ### 10.4 Entrada de datos (elige una)
 
@@ -459,8 +490,9 @@ nicho 3 hay una alternativa dentro del mismo problema:
 - **En contra:** no hay automatismo (hay que abrir la página cada semana), el valor recurrente es
   menor y el modelo de negocio cambia (implantación y soporte, no un servicio continuo).
 
-También sirve como **demostración** en las entrevistas con datos ficticios. No se construye hasta que
-lo decidas.
+Con el servidor en São Paulo (10.3), esta variante gana peso: es la única que no exige resolver la
+transferencia a un Estado sin nivel adecuado para los datos de los deudores. También sirve como
+**demostración** en las entrevistas con datos ficticios. No se construye hasta que lo decidas.
 
 ---
 
@@ -468,10 +500,10 @@ lo decidas.
 
 | Etapa | Qué se hace | Requiere de ti | Sale cuando |
 |---|---|---|---|
-| **0 · Diseño** (ahora) | Este documento, el plan de entrevistas y los criterios de la lista. | Tu OK a estos tres documentos (**Punto de control 2**). | Apruebas o corriges. |
-| **1 · Núcleo puro** | Módulos M1 a M5 en JavaScript, generador de datos ficticios, pruebas de los niveles 1 a 6, informe HTML de ejemplo. Todo local en el repositorio: sin n8n, sin datos reales, sin contactar a nadie. | OK para empezar; puede correr **en paralelo** a las entrevistas y da una demostración realista. | Criterios de salida de la sección 11. |
-| **2 · n8n de pruebas** | Shell y sub-workflows en una instancia de pruebas, datos ficticios, envío solo a tu bandeja; nivel 7. | Autorización expresa para crear workflows en la instancia elegida; credenciales creadas por ti. | Nada activo salvo tus ensayos; **Punto de control 3** con guía manual. |
-| **3 · Sombra** | Datos reales de un cliente que confirmó interés, con informe enmascarado. | Cliente que confirma interés real · **unipersonal en BPS/DGI** antes de tocar sus sistemas o facturar · contrato de encargo · inscripción de la base · región y transferencias resueltas · evaluación de impacto ligera. | El informe coincide con el cálculo manual del cliente varias semanas seguidas. |
+| **0 · Diseño** | Este documento, el plan de entrevistas y los criterios de la lista. | **Punto de control 2**: revisado el 30-sep-2026 con ajustes (15 entrevistas; Oracle en São Paulo). | Hecho, con las decisiones abiertas de la sección 16. |
+| **1 · Núcleo puro** | Módulos M1 a M5 en JavaScript, generador de datos ficticios, pruebas de los niveles 1 a 6, informe HTML de ejemplo. Todo local en el repositorio: sin n8n, sin datos reales, sin contactar a nadie. | **Autorizada el 30-sep**; arranca cuando resuelvas las preguntas previas. Corre **en paralelo** a las entrevistas y da una demostración realista. | Criterios de salida de la sección 11. |
+| **2 · n8n de pruebas** | Shell y sub-workflows en una instancia de pruebas, datos ficticios, envío solo a tu bandeja; nivel 7. | Autorizada el 30-sep **si la instancia es la de Oracle (São Paulo)**: falta confirmarlo. Credenciales creadas por ti. | Nada activo salvo tus ensayos; **Punto de control 3** con guía manual. |
+| **3 · Sombra** | Datos reales de un cliente que confirmó interés, con informe enmascarado. | Cliente que confirma interés real · **unipersonal en BPS/DGI** antes de tocar sus sistemas o facturar · contrato de encargo · inscripción de la base · **región y transferencias resueltas (São Paulo no vale sin más)** · evaluación de impacto documentada. | El informe coincide con el cálculo manual del cliente varias semanas seguidas. |
 | **4 · Piloto** | Informe real al dueño, en modo `enlace_salida`. | **Punto de control 4** («antes del envío final»): tu autorización expresa. | Un ciclo completo sin incidentes. |
 
 ---
@@ -504,8 +536,8 @@ Gravedad de 1 a 5 (5 = fuga de datos, correo a quien no corresponde o parada en 
 | R1 | Correo a un destinatario equivocado | 5 | Baja | Lista blanca, M5, `DRY_RUN`, `enlace_salida`, cambios con doble canal | Diseñado |
 | R2 | Fuga por registros o ejecuciones de n8n | 5 | Media | Sin datos de ejecución, canarios, errores con código | Diseñado |
 | R3 | Instancia de n8n vulnerable o expuesta | 5 | Media | Sin puertos, versión fija y actualizada, sin webhooks, 2FA | Diseñado |
-| R4 | Transferencia internacional sin base | 4 | Media | Región adecuada, cláusulas, consulta a la URCDP | **Abierto** |
-| R5 | Perfilado que exija evaluación de impacto | 3 | Baja | Sin puntaje ni historial; evaluación ligera | Diseñado |
+| R4 | Transferencia internacional sin base: Oracle en São Paulo (Brasil, fuera de la lista de la URCDP) | 4 | **Alta** con datos reales | Solo datos ficticios en São Paulo; producción en región adecuada, autorización de la URCDP o variante local | **Abierto** |
+| R5 | Evaluación de impacto obligatoria (transferencia a Estado no adecuado; perfilado) | 3 | **Alta** con São Paulo | Sin puntaje ni historial; evaluación documentada antes de datos reales | **Abierto** |
 | R6 | Datos de un cliente usados para otro fin | 5 | Baja | Aislamiento por cliente; art. 30; borrado | Diseñado |
 | R7 | Archivo malicioso, corrupto o enorme | 3 | Media | Límites, cuarentena, actualizar | Diseñado |
 | R8 | Cálculo equivocado (zona, moneda, decimal) | 4 | Media | UTC, rechazo de ambiguos, sombra | Diseñado |
@@ -525,17 +557,17 @@ Gravedad de 1 a 5 (5 = fuga de datos, correo a quien no corresponde o parada en 
 
 Necesito tu decisión en estos puntos; **hasta entonces no toco nada**.
 
-| # | Decisión | Opciones | Mi recomendación |
-|---|---|---|---|
-| D1 | ¿La instancia de n8n conectada es tu servidor de Oracle o una de aprendizaje? ¿Puedo usarla como **banco de pruebas** con datos ficticios, prefijo `[COB-DEV]` y nada activo? | Sí / No / Otra instancia | Usarla solo como pruebas si no es la de Oracle; PROD separada. |
-| D2 | Alcance inmediato | (a) Solo diseño; (b) empezar la Etapa 1 (núcleo puro, local, sin contactar a nadie) en paralelo a las entrevistas | (b): riesgo cero para terceros y te da una demostración realista para las entrevistas. |
-| D3 | Canal de entrada | A · Drive con cuenta de servicio · B · buzón · C · manual | A; C para el primer piloto. |
-| D4 | Modo de entrega con datos reales | `correo_completo` · `enlace_salida` | `enlace_salida` (un destinatario equivocado solo vería totales). |
-| D5 | Remitente | Gmail personal (solo ficticios) · dominio propio con buzón profesional | Dominio propio antes de datos reales. |
-| D6 | Hosting de producción y región | Oracle Always Free · Oracle PAYG · servidor de pago; región de país adecuado | PAYG o servidor de pago; ¿en qué región está tu cuenta? |
-| D7 | Consultas oficiales | Preguntar a la URCDP por la inscripción de la lista de prospectos, las notas y el libro; a la URSEC por el registro «No llame» | Hacerlo antes de guardar la primera lista real. |
-| D8 | Revisión de un abogado o contador local (una hora) | Sí / No | Sí, antes del primer contacto real: contrato de encargo y consulta sobre correo comercial. |
-| D9 | Variante local (sección 12) como demostración y alternativa | Sí / No / Después de las entrevistas | Después de las entrevistas. |
+| # | Decisión | Opciones | Mi recomendación | Estado (30-sep) |
+|---|---|---|---|---|
+| D1 | ¿La instancia de n8n conectada es tu servidor de Oracle? ¿Puedo usarla como **banco de pruebas** con datos ficticios, prefijo `[COB-DEV]` y nada activo? | Sí / No / Otra instancia | Usarla solo como pruebas; PROD separada. | **Respondida con condición:** sí, *si* es la de Oracle. **Falta confirmar que lo es.** |
+| D2 | Alcance inmediato | (a) Solo diseño; (b) empezar la Etapa 1 (núcleo puro, local, sin contactar a nadie) en paralelo a las entrevistas | (b) | **Respondida: (b).** Arranca tras las preguntas previas. |
+| D3 | Canal de entrada | A · Drive con cuenta de servicio · B · buzón · C · manual | A; C para el primer piloto. | Abierta (no bloquea la Etapa 1). |
+| D4 | Modo de entrega con datos reales | `correo_completo` · `enlace_salida` | `enlace_salida` (un destinatario equivocado solo vería totales). | Abierta (no bloquea la Etapa 1). |
+| D5 | Remitente | Gmail personal (solo ficticios) · dominio propio con buzón profesional | Dominio propio antes de datos reales. | Abierta. |
+| D6 | Hosting de producción y región | Oracle Always Free · Oracle PAYG · servidor de pago; región de país adecuado | Ver sección 10.3. | **Región respondida: São Paulo.** Falta decidir el hosting de producción (antes de la Etapa 3). |
+| D7 | Consultas oficiales | Preguntar a la URCDP por la inscripción de la lista de prospectos, las notas y el libro; a la URSEC por el registro «No llame» | Hacerlo antes de guardar la primera lista real. | Abierta. Puedo redactar los borradores de consulta para que los envíes tú. |
+| D8 | Revisión de un abogado o contador local (una hora) | Sí / No | Sí, antes del primer contacto real: contrato de encargo, transferencia a Brasil y consulta sobre correo comercial. | Abierta. |
+| D9 | Variante local (sección 12) como demostración y alternativa | Sí / No / Después de las entrevistas | Después de las entrevistas. | Abierta. |
 
 ---
 
@@ -554,6 +586,8 @@ URCDP: [Res. 23/021](https://www.gub.uy/unidad-reguladora-control-datos-personal
 
 **No verificado o dependiente de la versión:**
 - Si pasar a *Pay As You Go* evita la recuperación de instancias inactivas de Oracle.
+- Si Oracle permite cambiar la región de origen, crear servidores de pago en otras regiones o abrir otra cuenta
+  en una región adecuada, y bajo qué condiciones.
 - Que el listado de la URCDP no haya cambiado después de la Res. 63/023 (la página de la URCDP lista además una
   Res. 8/026 de abril de 2026 sobre cláusulas modelo del Consejo de Europa; **no leí su texto**).
 - Que el proveedor de nube y el de correo figuren en el listado del Marco de Privacidad de Datos de EE. UU.

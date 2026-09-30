@@ -1,6 +1,6 @@
 # Criterios para armar la lista de empresas objetivo · Uruguay
 
-**Estado:** borrador para el Punto de control 2 (diseño) · 29-sep-2026
+**Estado:** borrador para el Punto de control 2 (diseño) · 29-sep-2026 · ajustado el 30-sep-2026 para 15 entrevistas
 **No se ha armado ninguna lista.** Este documento fija las reglas; buscar empresas reales empieza
 solo cuando las apruebes. **No se ha contactado a nadie.**
 **Documentos hermanos:** [plan de entrevistas](01-plan-validacion.md) · [arquitectura en n8n](03-arquitectura-n8n.md)
@@ -18,7 +18,10 @@ solo cuando las apruebes. **No se ha contactado a nadie.**
   tener el problema, para pedir entrevistas y, más adelante, ofrecer el servicio de forma consultiva.
 - **No es** una base masiva, ni un raspado de páginas, ni una compra de listas, ni una
   segmentación automática.
-- **Tamaño:** primera tanda de **15** candidatas; máximo **50** durante la validación.
+- **Tamaño:** primera tanda de **20** candidatas; máximo **80** durante la validación. Para conseguir 15
+  entrevistas hacen falta muchas más invitaciones que entrevistas (tabla del
+  [plan, sección 9](01-plan-validacion.md#9-notas-síntesis-y-calendario)): la lista es solo una de las
+  vías, junto con los referidos y los contadores.
 - **Cada dato lleva su fuente y la fecha en que se vio.** Sin fuente, no entra.
 - **La lista real no se sube al repositorio.** Contiene datos personales (nombres de decisores).
   Vive fuera de git, en una carpeta cifrada o un Drive con verificación en dos pasos, en ficheros
@@ -156,10 +159,13 @@ Aplica a cada mensaje que envíes, sea correo o LinkedIn.
    dársela en ese plazo desde que la solicita (art. 13). El acceso es gratuito (art. 21).
 6. **Texto plano.** Sin adjuntos, sin imágenes, sin enlaces acortados ni píxeles de seguimiento.
 7. **Un solo recordatorio** a los 7 días; si no responde, se cierra.
-8. **Volumen (mi prudencia, no una norma):** hasta 5 contactos nuevos por semana durante la
-   calibración y hasta 10 por semana después; nunca más de 5 en un día. Sales desde una cuenta
-   Gmail personal sin dominio propio ni SPF/DKIM: la reputación se cuida con pocos mensajes bien
-   dirigidos, no con el límite de Gmail (500 al día).
+8. **Volumen (mi prudencia, no una norma):** el tope se aplica a los **correos en frío** a
+   direcciones públicas: hasta 5 nuevos por semana durante la calibración y hasta 10 por semana
+   después; nunca más de 5 en un día. Los referidos, los eventos y los mensajes 1 a 1 de LinkedIn
+   **no cuentan** en ese tope. Sales desde una cuenta Gmail personal sin dominio propio ni
+   SPF/DKIM: la reputación se cuida con pocos mensajes bien dirigidos, no con el límite de Gmail
+   (500 al día). Con 15 entrevistas por conseguir, el correo en frío no basta: el plan depende de la
+   red personal y de los contadores.
 9. **Teléfono y WhatsApp:** no en frío en esta fase (recuadro del
    [plan de entrevistas](01-plan-validacion.md#4-cómo-llegar-a-ellos-por-orden-de-preferencia)).
    Cuando se use: consultar el registro «No llame» (previa inscripción en la URSEC), conservar la
