@@ -406,18 +406,47 @@ test('sin operador válido la alerta no sale, pero queda constancia y el sistema
 
 /* ---------------------------------------------------------------- fechas */
 
-test('la fecha de corte y la semana son las locales: el domingo por la noche sigue siendo domingo', () => {
+test('la fecha de corte es la local del cliente; la semana del libro es la de la exportación', () => {
   const casos = [
-    ['2026-10-11T23:30:00Z', '2026-10-11', '2026-W41'], // 20:30 del domingo en Montevideo
-    ['2026-10-12T02:59:00Z', '2026-10-11', '2026-W41'], // 23:59 del domingo
-    ['2026-10-12T03:00:00Z', '2026-10-12', '2026-W42'] // 00:00 del lunes
+    ['2026-10-11T23:30:00Z', '2026-10-11'], // 20:30 del domingo en Montevideo
+    ['2026-10-12T02:59:00Z', '2026-10-11'], // 23:59 del domingo
+    ['2026-10-12T03:00:00Z', '2026-10-12'] // 00:00 del lunes
   ];
-  for (const [ahora, fecha, semana] of casos) {
-    const m = mundo({ modificado: '2026-10-11T12:00:00.000Z' });
+  for (const [ahora, fecha] of casos) {
+    const m = mundo({ modificado: '2026-10-11T12:00:00.000Z' }); // exportado el domingo 11 (semana 41)
     const r = correr(m, ahora);
     assert.equal(r.fecha_corte, fecha, ahora);
-    assert.equal(m.libro[0].semana_iso, semana, ahora);
+    assert.equal(m.libro[0].semana_iso, '2026-W41', ahora);
   }
+});
+
+test('el día de la exportación también es el LOCAL: un archivo guardado el domingo a las 23:30 en Montevideo es de la semana anterior', () => {
+  // 02:30 UTC del lunes 12 son las 23:30 del domingo 11 en Montevideo
+  const m = mundo({ modificado: '2026-10-12T02:30:00.000Z' });
+  const r = correr(m, '2026-10-12T11:30:00Z');
+  assert.equal(r.estado, 'informe_enviado');
+  assert.equal(m.libro[0].semana_iso, '2026-W41');
+});
+
+test('un archivo que sigue fresco al cruzar el lunes NO genera un segundo informe', () => {
+  const m = mundo({ modificado: '2026-10-09T10:00:00.000Z' }); // exportado el viernes 9 (semana 41)
+  assert.equal(correr(m, '2026-10-09T11:30:00Z').estado, 'informe_enviado');
+  for (const t of ['2026-10-10T11:30:00Z', '2026-10-12T11:30:00Z', '2026-10-13T11:30:00Z', '2026-10-14T11:30:00Z']) {
+    assert.equal(correr(m, t).estado, 'ya_procesado', t); // sábado, lunes y siguientes: semana 42 en el reloj, pero el mismo archivo
+  }
+  assert.equal(m.aDueno().length, 1);
+  assert.deepEqual(m.libro.map((f) => f.semana_iso), ['2026-W41']);
+});
+
+test('si el cliente re-exporta el mismo contenido la semana siguiente, sí hay informe nuevo (cadencia semanal)', () => {
+  const texto = csv(facs());
+  const m = mundo({ texto, modificado: '2026-10-09T10:00:00.000Z' });
+  correr(m, '2026-10-09T11:30:00Z');
+  m.drive.archivos[0] = archivo({ texto, modificado: '2026-10-16T10:00:00.000Z' }); // mismo contenido, nueva exportación
+  assert.equal(correr(m, '2026-10-16T11:30:00Z').estado, 'informe_enviado');
+  assert.equal(correr(m, '2026-10-17T11:30:00Z').estado, 'ya_procesado');
+  assert.equal(m.aDueno().length, 2);
+  assert.deepEqual(m.libro.map((f) => f.semana_iso), ['2026-W41', '2026-W42']);
 });
 
 /* --------------------------------------------------------- archivos hostiles */

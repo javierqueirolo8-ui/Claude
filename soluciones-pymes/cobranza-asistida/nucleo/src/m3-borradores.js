@@ -217,7 +217,7 @@ var M3 = (function () {
       validarVencida(v);
       var fila = typeof v.fila_origen === 'number' ? v.fila_origen : null;
       if (v.escalon === 'en_disputa') { sinBorrador.push({ indice: indice, factura_ref: v.factura_ref, moneda: v.moneda, fila_origen: fila, motivo: 'en_disputa' }); return; }
-      var p = plantillas[v.escalon];
+      var p = Object.prototype.hasOwnProperty.call(plantillas, v.escalon) ? plantillas[v.escalon] : null; // «constructor» no es una plantilla
       if (!p) Util.fallar('E_PLANTILLA_FALTANTE');
 
       var vars = variables(v, emp);

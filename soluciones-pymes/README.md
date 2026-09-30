@@ -6,7 +6,7 @@ necesario, con pruebas.
 
 | Carpeta | Sector | Problema | Estado |
 |---|---|---|---|
-| [`cobranza-asistida/`](cobranza-asistida/) | Pymes uruguayas que facturan a crédito a otras empresas | Facturas vencidas que nadie reclama a tiempo | **En diseño** (Punto de control 2): plan de entrevistas, criterios de la lista objetivo y arquitectura en n8n. Nada construido ni activado. |
+| [`cobranza-asistida/`](cobranza-asistida/) | Pymes uruguayas que facturan a crédito a otras empresas | Facturas vencidas que nadie reclama a tiempo | **Etapa 1 hecha** ([`nucleo/`](cobranza-asistida/nucleo/)): plan de entrevistas, criterios de la lista objetivo, arquitectura en n8n y el núcleo de código con sus pruebas. En n8n nada construido ni activado; la Etapa 2 espera OK. |
 | [`biblioteca-tecnica/recordacitas/`](biblioteca-tecnica/recordacitas/) | Negocios con cita previa o reserva | Citas a las que el cliente no se presenta | **Archivada** como biblioteca técnica, no como producto. Sigue verificada. |
 
 Ver [`biblioteca-tecnica/`](biblioteca-tecnica/) para qué piezas se reutilizan.
@@ -26,7 +26,7 @@ riesgo. Se descartó lo que no cumpliera estas condiciones:
 
 ### Problemas evaluados
 
-**1. Facturas cobradas tarde (cobranza asistida) → elegido; en diseño.**
+**1. Facturas cobradas tarde (cobranza asistida) → elegido; núcleo de código hecho, validación pendiente.**
 El período medio de pago de las empresas en España fue de **80,5 días** en el segundo semestre de
 2025 frente a un máximo legal de 60, y solo el **30,4 %** de los importes facturados se cobró
 puntualmente o por anticipado (Observatorio de la Morosidad de CEPYME, publicado en abril de 2026).

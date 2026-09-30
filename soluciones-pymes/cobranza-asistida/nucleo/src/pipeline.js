@@ -76,15 +76,19 @@ var Cobranza = (function () {
   /* ------------------------------------------------------------- arranque */
 
   /* e: { config, fila_control, fecha_corte, ahora_utc, fila_bloqueo }
-     → { accion: 'continuar' | 'detener' | 'omitir_en_curso' | 'alertar_bloqueo_vencido', motivo, problemas, guardias }
+     → { accion: 'continuar' | 'detener' | 'omitir_en_curso' | 'alertar_bloqueo_vencido', motivo, codigo?, problemas, guardias }
+     (con configuración inválida: motivo «CONFIG_INVALIDA», código «E_CFG_INVALIDA» y la lista de problemas)
      El orden importa: primero los interruptores, después la configuración y al final el bloqueo. */
   function arrancar(e) {
     if (!esObjeto(e)) Util.fallar('E_ARRANQUE_INVALIDO');
     var guardias = M0.evaluarGuardias(e.fila_control);
     if (!guardias.permitido) return { accion: 'detener', motivo: guardias.motivo, problemas: [], guardias: guardias };
     var cfg = validarConfiguracion(e.config, e.fecha_corte);
-    if (!cfg.ok) return { accion: 'detener', motivo: 'CONFIG_INVALIDA', problemas: cfg.problemas, guardias: guardias };
-    var bloqueo = M6.estadoBloqueo(e.fila_bloqueo === undefined ? null : e.fila_bloqueo, e.ahora_utc);
+    if (!cfg.ok) return { accion: 'detener', motivo: 'CONFIG_INVALIDA', codigo: 'E_CFG_INVALIDA', problemas: cfg.problemas, guardias: guardias };
+    var fila = e.fila_bloqueo === undefined ? null : e.fila_bloqueo;
+    // el bloqueo de OTRO cliente no dice nada de este: si la fila no es la suya, algo está mal aguas arriba
+    if (fila !== null && (!esObjeto(fila) || fila.cliente_id !== e.config.cliente_id)) Util.fallar('E_BLOQUEO_INVALIDO');
+    var bloqueo = M6.estadoBloqueo(fila, e.ahora_utc);
     var decision = M6.decidirEjecucion({ ya_resuelto: false, bloqueo: bloqueo });
     if (decision === 'procesar') return { accion: 'continuar', motivo: null, problemas: [], guardias: guardias };
     return { accion: decision, motivo: decision === 'omitir_en_curso' ? 'BLOQUEO_ACTIVO' : 'BLOQUEO_VENCIDO', problemas: [], guardias: guardias };
@@ -128,16 +132,23 @@ var Cobranza = (function () {
   var SIN_CONTEOS = { n_filas: 0, n_vencidas: 0, n_apartadas: 0 };
 
   /* e: { config, guardias, fecha_corte, tipo: 'informe' | 'incidencia' | 'sin_archivo', preparado?, enlace_informe?,
-          hash_archivo, iniciada_utc, terminada_utc }
+          hash_archivo, fecha_exportacion (día local en que se modificó el archivo; no aplica a «sin_archivo»),
+          iniciada_utc, terminada_utc }
      → { correo: { asunto, cuerpo_texto, adjunto? }, envio: { accion, destinatarios, motivos, bloqueados }, libro }
-     Lanza E_ENVIO_<motivo> si la guardia de envío no deja enviar. */
+     La semana del libro es la de la EXPORTACIÓN, no la de la ejecución: un archivo que sigue fresco al cruzar el
+     lunes no genera un segundo informe. Lanza E_ENVIO_<motivo> si la guardia de envío no deja enviar. */
   function armarEnvio(e) {
     if (!esObjeto(e) || !esObjeto(e.config) || !Util.esISO(e.fecha_corte)) Util.fallar('E_ENVIO_INVALIDO');
     var config = e.config;
     var real = M5.esEnvioReal(e.guardias, config.modo);
     var ensayo = !real;
+    // Segunda barrera (la primera está en arrancar): el informe completo por correo con datos reales exige aceptación expresa.
+    if (real && config.entrega === 'correo_completo' && config.acepta_correo_completo !== true) Util.fallar('E_CFG_ENTREGA_REAL');
+    var conArchivo = e.tipo === 'informe' || e.tipo === 'incidencia';
+    if (conArchivo && (!Util.esISO(e.fecha_exportacion) || e.fecha_exportacion > e.fecha_corte)) Util.fallar('E_ENVIO_INVALIDO');
+    if (conArchivo && e.hash_archivo === M7.HUELLA_SIN_ARCHIVO) Util.fallar('E_LIBRO_INVALIDO'); // la huella de «sin archivo» no es de un archivo
     var p = e.preparado;
-    if ((e.tipo === 'informe' || e.tipo === 'incidencia') && (!esObjeto(p) || p.tipo !== e.tipo || p.ensayo !== ensayo)) Util.fallar('E_INCONSISTENCIA_ENSAYO');
+    if (conArchivo && (!esObjeto(p) || p.tipo !== e.tipo || p.ensayo !== ensayo)) Util.fallar('E_INCONSISTENCIA_ENSAYO');
 
     var correo, estado, codigoError = null, conteos, hash = e.hash_archivo;
     if (e.tipo === 'informe') {
@@ -178,7 +189,7 @@ var Cobranza = (function () {
 
     // La fila del libro se valida ahora, antes de enviar: una fila inválida detiene el envío, no lo sigue.
     var libro = M6.filaLibro({
-      cliente_id: config.cliente_id, semana_iso: Util.semanaISO(e.fecha_corte), hash_archivo: hash, estado: estado,
+      cliente_id: config.cliente_id, semana_iso: Util.semanaISO(conArchivo ? e.fecha_exportacion : e.fecha_corte), hash_archivo: hash, estado: estado,
       iniciada_utc: e.iniciada_utc, terminada_utc: e.terminada_utc,
       n_filas: conteos.n_filas, n_vencidas: conteos.n_vencidas, n_apartadas: conteos.n_apartadas,
       codigo_error: codigoError, modo: ensayo ? 'dry' : 'real'
@@ -188,12 +199,17 @@ var Cobranza = (function () {
 
   /* --------------------------------------------------------------- errores */
 
-  /* e: { error, contexto: { cliente_id, workflow, nodo, ejecucion_id }, operador }
+  /* e: { error, contexto: { cliente_id, workflow, nodo, ejecucion_id }, operador, problemas? (lista de códigos) }
      → { sano, texto: { asunto, cuerpo_texto }, envio }   Todo lo que va a Javier son códigos. */
   function alertaOperador(e) {
     if (!esObjeto(e)) Util.fallar('E_ALERTA_INVALIDA');
     var sano = M6.sanearError(e.error, e.contexto);
     var texto = M6.textoAlerta(sano);
+    if (e.problemas !== undefined) {
+      var lista = e.problemas;
+      if (!Array.isArray(lista) || lista.length > 40 || lista.some(function (c) { return typeof c !== 'string' || !/^E_[A-Z0-9_]{2,40}$/.test(c); })) Util.fallar('E_ALERTA_INVALIDA');
+      if (lista.length) texto = { asunto: texto.asunto, cuerpo_texto: texto.cuerpo_texto + '\nProblemas: ' + lista.join(', ') };
+    }
     // La alerta va solo a Javier; no depende del ensayo (no lleva datos del cliente) pero pasa por la misma guardia.
     var envio = M5.guardiaEnvio({
       solicitados: [e.operador], lista_blanca: [e.operador], guardias: { permitido: true, dry_run: false }, modo_cliente: 'real'

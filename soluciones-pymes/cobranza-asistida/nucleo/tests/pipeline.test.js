@@ -117,6 +117,16 @@ test('un bloqueo mal formado no se interpreta: falla con código', () => {
   assert.equal(codigo(() => Cobranza.arrancar(null)), 'E_ARRANQUE_INVALIDO');
 });
 
+test('la configuración inválida trae su propio código; la fila de bloqueo de otro cliente no vale', () => {
+  const r = arrancar({ config: config({ entrega: 'papel' }) });
+  assert.equal(r.codigo, 'E_CFG_INVALIDA');
+  assert.deepEqual(r.problemas, ['E_CFG_ENTREGA']);
+  assert.equal(codigo(() => Cobranza.arrancar({ config: config(), fila_control: CONTROL_ON, fecha_corte: CORTE, ahora_utc: AHORA, fila_bloqueo: { cliente_id: 'otro-cliente', expira_utc: '2026-10-05T12:00:00Z' } })), 'E_BLOQUEO_INVALIDO');
+  for (const fila of ['x', 5, [], { expira_utc: '2026-10-05T12:00:00Z' }]) {
+    assert.equal(codigo(() => Cobranza.arrancar({ config: config(), fila_control: CONTROL_ON, fecha_corte: CORTE, ahora_utc: AHORA, fila_bloqueo: fila })), 'E_BLOQUEO_INVALIDO', JSON.stringify(fila));
+  }
+});
+
 /* ----------------------------------------------------------------- preparar */
 
 test('CSV normal: informe con los conteos correctos y prefijo de ensayo', () => {
@@ -239,7 +249,7 @@ const armarEnvio = (extra = {}) => {
   const cfg = extra.config || config();
   const p = extra.tipo === 'sin_archivo' ? undefined : preparar({ guardias, config: cfg, contenido: extra.contenido || { formato: 'csv', texto: csvA(facturas()) } });
   return plano(Cobranza.armarEnvio({
-    config: cfg, guardias, fecha_corte: CORTE, tipo: (p && p.tipo) || 'sin_archivo', preparado: p, hash_archivo: HUELLA,
+    config: cfg, guardias, fecha_corte: CORTE, tipo: (p && p.tipo) || 'sin_archivo', preparado: p, hash_archivo: HUELLA, fecha_exportacion: CORTE,
     enlace_informe: 'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view', iniciada_utc: AHORA, terminada_utc: FIN, ...extra
   }));
 };
@@ -332,8 +342,8 @@ test('la fila del libro trae solo contadores y códigos (ningún dato del client
 
 test('si las llaves cambian entre preparar y armar el envío, se detiene (no se mezclan ensayo y real)', () => {
   const p = preparar({ guardias: ENSAYO });
-  assert.equal(codigo(() => Cobranza.armarEnvio({ config: config({ modo: 'real' }), guardias: REAL, fecha_corte: CORTE, tipo: 'informe', preparado: p, hash_archivo: HUELLA, enlace_informe: 'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view', iniciada_utc: AHORA, terminada_utc: FIN })), 'E_INCONSISTENCIA_ENSAYO');
-  assert.equal(codigo(() => Cobranza.armarEnvio({ config: config(), guardias: ENSAYO, fecha_corte: CORTE, tipo: 'incidencia', preparado: p, hash_archivo: HUELLA, iniciada_utc: AHORA, terminada_utc: FIN })), 'E_INCONSISTENCIA_ENSAYO');
+  assert.equal(codigo(() => Cobranza.armarEnvio({ config: config({ modo: 'real' }), guardias: REAL, fecha_corte: CORTE, fecha_exportacion: CORTE, tipo: 'informe', preparado: p, hash_archivo: HUELLA, enlace_informe: 'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view', iniciada_utc: AHORA, terminada_utc: FIN })), 'E_INCONSISTENCIA_ENSAYO');
+  assert.equal(codigo(() => Cobranza.armarEnvio({ config: config(), guardias: ENSAYO, fecha_corte: CORTE, fecha_exportacion: CORTE, tipo: 'incidencia', preparado: p, hash_archivo: HUELLA, iniciada_utc: AHORA, terminada_utc: FIN })), 'E_INCONSISTENCIA_ENSAYO');
 });
 
 test('sin «modo» en la configuración se ensaya: el mensaje va a la bandeja de pruebas', () => {
@@ -352,15 +362,48 @@ test('si la guardia de envío y la definición de «real» no coinciden, se deti
     // una guardia defectuosa que «enviaría de verdad» aunque falte una llave
     M5.guardiaEnvio = () => ({ accion: 'enviar', destinatarios: ['administracion@ferreteria-ficticia.example'], motivos: [], bloqueados: [] });
     const enEnsayo = preparar({ guardias: ENSAYO });
-    assert.equal(codigo(() => Cobranza.armarEnvio({ config: config(), guardias: ENSAYO, fecha_corte: CORTE, tipo: 'informe', preparado: enEnsayo, hash_archivo: HUELLA, enlace_informe: enlace, iniciada_utc: AHORA, terminada_utc: FIN })), 'E_INCONSISTENCIA_ENSAYO');
+    assert.equal(codigo(() => Cobranza.armarEnvio({ config: config(), guardias: ENSAYO, fecha_corte: CORTE, fecha_exportacion: CORTE, tipo: 'informe', preparado: enEnsayo, hash_archivo: HUELLA, enlace_informe: enlace, iniciada_utc: AHORA, terminada_utc: FIN })), 'E_INCONSISTENCIA_ENSAYO');
     // y una que «ensayaría» con todas las llaves abiertas
     M5.guardiaEnvio = () => ({ accion: 'redirigir_ensayo', destinatarios: ['bandeja.de.pruebas@ejemplo.example'], motivos: ['ENSAYO'], bloqueados: [] });
     const enReal = preparar({ guardias: REAL, config: config({ modo: 'real' }) });
-    assert.equal(codigo(() => Cobranza.armarEnvio({ config: config({ modo: 'real' }), guardias: REAL, fecha_corte: CORTE, tipo: 'informe', preparado: enReal, hash_archivo: HUELLA, enlace_informe: enlace, iniciada_utc: AHORA, terminada_utc: FIN })), 'E_INCONSISTENCIA_ENSAYO');
+    assert.equal(codigo(() => Cobranza.armarEnvio({ config: config({ modo: 'real' }), guardias: REAL, fecha_corte: CORTE, fecha_exportacion: CORTE, tipo: 'informe', preparado: enReal, hash_archivo: HUELLA, enlace_informe: enlace, iniciada_utc: AHORA, terminada_utc: FIN })), 'E_INCONSISTENCIA_ENSAYO');
   } finally {
     M5.guardiaEnvio = original;
   }
   assert.equal(armarEnvio().envio.accion, 'redirigir_ensayo', 'la guardia real quedó restaurada');
+});
+
+test('la semana del libro es la de la EXPORTACIÓN; para «no llegó», la de hoy', () => {
+  // exportado el domingo 4 (semana 40), procesado el lunes 5 (semana 41)
+  const r = armarEnvio({ fecha_exportacion: '2026-10-04' });
+  assert.equal(r.libro.semana_iso, '2026-W40');
+  assert.equal(r.libro.clave, 'demo-01|2026-W40|' + HUELLA);
+  const sin = armarEnvio({ tipo: 'sin_archivo', fecha_exportacion: '2026-10-04' });
+  assert.equal(sin.libro.semana_iso, '2026-W41');
+});
+
+test('la fecha de exportación debe existir y no puede ser posterior a la ejecución', () => {
+  for (const f of [undefined, null, '', '04/10/2026', '2026-02-30', '2026-10-06', 5]) {
+    assert.equal(codigo(() => armarEnvio({ fecha_exportacion: f })), 'E_ENVIO_INVALIDO', String(f));
+  }
+  assert.equal(armarEnvio({ fecha_exportacion: CORTE }).libro.semana_iso, '2026-W41');
+});
+
+test('la huella de «sin archivo» no puede ser la de un archivo real', () => {
+  assert.equal(codigo(() => armarEnvio({ hash_archivo: M7.HUELLA_SIN_ARCHIVO })), 'E_LIBRO_INVALIDO');
+  const texto = csvA(facturas()).replace('Saldo', 'Monto total');
+  assert.equal(codigo(() => armarEnvio({ hash_archivo: M7.HUELLA_SIN_ARCHIVO, contenido: { formato: 'csv', texto } })), 'E_LIBRO_INVALIDO');
+});
+
+test('segunda barrera: en modo real el informe completo por correo exige aceptación aunque se llame directamente', () => {
+  const cfg = config({ modo: 'real', entrega: 'correo_completo' });
+  const p = preparar({ guardias: REAL, config: cfg });
+  const llamar = (c) => codigo(() => Cobranza.armarEnvio({ config: c, guardias: REAL, fecha_corte: CORTE, fecha_exportacion: CORTE, tipo: 'informe', preparado: p, hash_archivo: HUELLA, iniciada_utc: AHORA, terminada_utc: FIN }));
+  assert.equal(llamar(cfg), 'E_CFG_ENTREGA_REAL');
+  assert.equal(llamar({ ...cfg, acepta_correo_completo: 'true' }), 'E_CFG_ENTREGA_REAL');
+  assert.equal(llamar({ ...cfg, acepta_correo_completo: true }), null);
+  // en ensayo no hace falta
+  assert.equal(armarEnvio({ config: config({ entrega: 'correo_completo' }) }).envio.accion, 'redirigir_ensayo');
 });
 
 test('la guardia de envío bloquea con un código propio', () => {
@@ -372,7 +415,7 @@ test('la guardia de envío bloquea con un código propio', () => {
   for (const [cambio, esperado] of casos) {
     const cfg = config(cambio);
     const p = preparar({ config: config() });
-    assert.equal(codigo(() => Cobranza.armarEnvio({ config: cfg, guardias: ENSAYO, fecha_corte: CORTE, tipo: 'informe', preparado: p, hash_archivo: HUELLA, enlace_informe: 'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view', iniciada_utc: AHORA, terminada_utc: FIN })), esperado);
+    assert.equal(codigo(() => Cobranza.armarEnvio({ config: cfg, guardias: ENSAYO, fecha_corte: CORTE, fecha_exportacion: CORTE, tipo: 'informe', preparado: p, hash_archivo: HUELLA, enlace_informe: 'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view', iniciada_utc: AHORA, terminada_utc: FIN })), esperado);
   }
 });
 
@@ -383,7 +426,7 @@ test('una fila de libro inválida detiene el envío ANTES de enviar', () => {
 });
 
 test('tipo desconocido o entrada rota: se detiene', () => {
-  assert.equal(codigo(() => Cobranza.armarEnvio({ config: config(), guardias: ENSAYO, fecha_corte: CORTE, tipo: 'otra', hash_archivo: HUELLA, iniciada_utc: AHORA, terminada_utc: FIN })), 'E_ENVIO_INVALIDO');
+  assert.equal(codigo(() => Cobranza.armarEnvio({ config: config(), guardias: ENSAYO, fecha_corte: CORTE, fecha_exportacion: CORTE, tipo: 'otra', hash_archivo: HUELLA, iniciada_utc: AHORA, terminada_utc: FIN })), 'E_ENVIO_INVALIDO');
   assert.equal(codigo(() => Cobranza.armarEnvio(null)), 'E_ENVIO_INVALIDO');
   assert.equal(codigo(() => Cobranza.armarEnvio({ config: null })), 'E_ENVIO_INVALIDO');
 });
@@ -399,6 +442,17 @@ test('la alerta a Javier solo lleva códigos, aunque el error traiga datos del c
   assert.equal(r.envio.accion, 'enviar');
   assert.deepEqual(r.envio.destinatarios, ['javier@ejemplo.example']);
   assert.match(r.texto.asunto, /^Error en cobranza · demo-01 · E_ARCHIVO_INVALIDO$/);
+});
+
+test('la alerta puede llevar la lista de problemas de configuración, y solo como códigos', () => {
+  const base = { error: Object.assign(new Error('x'), { codigo: 'E_CFG_INVALIDA' }), contexto: { cliente_id: 'demo-01' }, operador: 'javier@ejemplo.example' };
+  const r = plano(Cobranza.alertaOperador({ ...base, problemas: ['E_CFG_ENTREGA', 'E_CFG_ZONA'] }));
+  assert.ok(r.texto.cuerpo_texto.endsWith('\nProblemas: E_CFG_ENTREGA, E_CFG_ZONA'));
+  assert.equal(r.texto.asunto, 'Error en cobranza · demo-01 · E_CFG_INVALIDA');
+  assert.equal(plano(Cobranza.alertaOperador({ ...base, problemas: [] })).texto.cuerpo_texto.includes('Problemas'), false);
+  for (const malo of ['E_CFG_ZONA', ['Juan Pérez'], [5], [['E_CFG_ZONA']], ['E_CFG_ZONA\nBcc: x@y.com'], Array.from({ length: 41 }, () => 'E_X1'), null]) {
+    assert.equal(codigo(() => Cobranza.alertaOperador({ ...base, problemas: malo })), 'E_ALERTA_INVALIDA', JSON.stringify(malo));
+  }
 });
 
 test('sin un operador válido la alerta no se envía (y lo dice)', () => {

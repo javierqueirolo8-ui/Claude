@@ -339,6 +339,18 @@ test('normalizarObjetos: filas ya extraídas, con números y fechas tipados de u
   assert.equal(r.resumen.total, 5);
 });
 
+test('normalizarObjetos: títulos de columna hostiles (__proto__, constructor…) ni rompen nada ni contaminan los objetos', () => {
+  const fila = JSON.parse('{"Nro Factura":"A-1","Cliente":"X","Saldo":100,"Vencimiento":"01/09/2026","Moneda":"UYU","__proto__":{"contaminado":1},"constructor":"c","toString":"t","hasOwnProperty":"h"}');
+  const r = plano(M1.normalizarObjetos([fila, { ...fila, 'Nro Factura': 'A-2' }], CFG));
+  assert.equal(r.error, null);
+  assert.deepEqual(r.facturas.map((f) => f.factura_ref), ['A-1', 'A-2']);
+  assert.equal(({}).contaminado, undefined);
+  assert.equal(Object.prototype.contaminado, undefined);
+  // un título llamado como un campo interno no se confunde con el mapeo
+  const cfg = { ...CFG, mapeo_columnas: { ...MAPEO, factura: 'constructor' } };
+  assert.equal(plano(M1.normalizarObjetos([{ constructor: 'A-9', Cliente: 'X', Saldo: 100, Vencimiento: '01/09/2026', Moneda: 'UYU' }], cfg)).facturas[0].factura_ref, 'A-9');
+});
+
 test('normalizarObjetos: las claves distintas entre filas se unen; una lista mal formada falla con código', () => {
   const r = plano(M1.normalizarObjetos([{ F: 'A1', C: 'X', I: '1.000', V: '01/09/2026' }, { F: 'A2', C: 'Y', I: '2.000', V: '01/09/2026', Extra: 'z' }],
     { mapeo_columnas: { factura: 'F', deudor: 'C', importe: 'I', vencimiento: 'V' }, moneda_por_defecto: 'UYU', fecha_corte: '2026-10-05' }));

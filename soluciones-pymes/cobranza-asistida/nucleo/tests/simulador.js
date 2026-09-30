@@ -123,8 +123,8 @@ function* ejecucion(mundo, ahoraUtc) {
       mundo.registros.push({ evento: 'detenida', motivo: arr.motivo, problemas: arr.problemas });
       if (arr.motivo === 'CONFIG_INVALIDA') {
         // configuración mala = aviso a Javier con los códigos a corregir (nunca al dueño)
-        const a = plano(Cobranza.alertaOperador({ error: Object.assign(new Error('config'), { codigo: arr.problemas[0] }), contexto, operador: mundo.operador }));
-        enviar('operador', a.envio, { asunto: a.texto.asunto, cuerpo_texto: a.texto.cuerpo_texto + '\nProblemas: ' + arr.problemas.join(', ') });
+        const a = plano(Cobranza.alertaOperador({ error: Object.assign(new Error('config'), { codigo: arr.codigo }), contexto, operador: mundo.operador, problemas: arr.problemas }));
+        enviar('operador', a.envio, a.texto);
       }
       return { estado: 'detenida', motivo: arr.motivo, fecha_corte: fechaCorte };
     }
@@ -149,20 +149,21 @@ function* ejecucion(mundo, ahoraUtc) {
     }));
     if (eleccion.estado === 'ambiguo') Util.fallar('E_ARCHIVO_AMBIGUO');
 
-    const semana = Util.semanaISO(fechaCorte);
-    const yaResuelto = (h) => mundo.libro.some((f) => f.clave === clienteId + '|' + semana + '|' + h && (f.estado === 'ok' || f.estado === 'incidencia'));
-    const libroYEnvio = (tipo, hashUsado, preparado, enlace) => {
+    // La semana de la clave es la de la EXPORTACIÓN (día local en que se modificó el archivo); para «no llegó», la de hoy.
+    const semanaDe = (fecha) => Util.semanaISO(fecha);
+    const yaResuelto = (h, semana) => mundo.libro.some((f) => f.clave === clienteId + '|' + semana + '|' + h && (f.estado === 'ok' || f.estado === 'incidencia'));
+    const libroYEnvio = (tipo, hashUsado, preparado, enlace, fechaExportacion) => {
       contexto.nodo = 'Armar envío';
       const r = plano(Cobranza.armarEnvio({
         config: cfg, guardias: { permitido: guardias.permitido, dry_run: guardias.dry_run }, fecha_corte: fechaCorte, tipo, preparado, hash_archivo: hashUsado,
-        enlace_informe: enlace, iniciada_utc: iniciada, terminada_utc: ahoraUtc
+        fecha_exportacion: fechaExportacion, enlace_informe: enlace, iniciada_utc: iniciada, terminada_utc: ahoraUtc
       }));
       return r;
     };
 
     if (eleccion.estado === 'sin_archivo') {
       contexto.nodo = 'Sin archivo';
-      const decision = M7.decidirSinArchivo({ fecha_corte: fechaCorte, dia_aviso: cfg.dia_aviso_sin_archivo, aviso_ya_enviado: yaResuelto(M7.HUELLA_SIN_ARCHIVO) });
+      const decision = M7.decidirSinArchivo({ fecha_corte: fechaCorte, dia_aviso: cfg.dia_aviso_sin_archivo, aviso_ya_enviado: yaResuelto(M7.HUELLA_SIN_ARCHIVO, semanaDe(fechaCorte)) });
       mundo.registros.push({ evento: 'sin_archivo', decision, descartados: eleccion.por_codigo });
       if (decision !== 'avisar') { soltar(); return { estado: 'sin_archivo_' + decision, fecha_corte: fechaCorte }; }
       const r = libroYEnvio('sin_archivo', M7.HUELLA_SIN_ARCHIVO, undefined);
@@ -184,7 +185,7 @@ function* ejecucion(mundo, ahoraUtc) {
     yield 'archivo_descargado';
 
     contexto.nodo = 'Libro';
-    const decision = M6.decidirEjecucion({ ya_resuelto: yaResuelto(hash), bloqueo: 'libre' });
+    const decision = M6.decidirEjecucion({ ya_resuelto: yaResuelto(hash, semanaDe(elegido.modificado_fecha)), bloqueo: 'libre' });
     if (decision === 'omitir_ya_procesado') {
       mundo.registros.push({ evento: 'ya_procesado' });
       soltar();
@@ -200,7 +201,7 @@ function* ejecucion(mundo, ahoraUtc) {
       contexto.nodo = 'Subir informe';
       enlace = io('E_DRIVE_SUBIR', () => mundo.drive.subir(p.informe.nombre_archivo, p.informe.html_completo));
     }
-    const r = libroYEnvio(p.tipo, hash, p, enlace);
+    const r = libroYEnvio(p.tipo, hash, p, enlace, elegido.modificado_fecha);
     yield 'antes_de_enviar';
     contexto.nodo = 'Enviar';
     enviar('dueno', r.envio, r.correo);

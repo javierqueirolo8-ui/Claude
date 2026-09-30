@@ -1,9 +1,10 @@
 # Arquitectura modular base en n8n · Cobranza asistida
 
-**Estado:** diseño para el Punto de control 2 · 29-sep-2026 · **actualizado el 30-sep-2026**: Etapa 1 autorizada,
-n8n confirmado como tu servidor de Oracle y autorizado como banco de pruebas (solo datos ficticios), y Oracle está en **São Paulo**.
-**No se ha construido, activado ni ejecutado nada.** No se creó ningún workflow, credencial ni tabla en
-tu n8n y no se envió ningún correo. Este documento es el diseño; el desarrollo espera tu OK.
+**Estado:** diseño para el Punto de control 2 · 29-sep-2026 · **actualizado el 30-sep-2026**: la **Etapa 1 está terminada**
+(el núcleo puro, con sus pruebas, está en [`../nucleo/`](../nucleo/)), n8n está confirmado como tu servidor de Oracle y autorizado
+como banco de pruebas (solo datos ficticios), y Oracle está en **São Paulo**. **En n8n no se ha construido, activado ni ejecutado
+nada**: no se creó ningún workflow, credencial ni tabla en tu n8n y no se envió ningún correo. La Etapa 2 (armar el flujo en tu n8n)
+**espera tu OK**.
 **Documentos hermanos:** [plan de entrevistas](01-plan-validacion.md) · [criterios de la lista](02-criterios-lista-objetivo.md)
 
 > No es asesoramiento jurídico. Los textos legales son los oficiales (IMPO, gub.uy) leídos el
@@ -56,7 +57,7 @@ la cuota; si más adelante se usa una API de pago, la contrata y la paga el clie
 | 3 | **Destinatario correcto** | Lista blanca en la configuración del cliente; guardia de envío (M5); `DRY_RUN` activo por defecto y redirigido a tu bandeja; máximo 3 destinatarios. | Propiedades con destinatarios hostiles (saltos de línea, mayúsculas, dominios parecidos, listas largas); prueba de mutación. |
 | 4 | **Sin fugas de datos** | n8n no guarda datos de ejecución; errores con código y sin valores; estado sin datos personales; nada de facturas en tablas. | Prueba «canario»: se inyecta un texto único en cada campo del archivo, se fuerzan fallos y se busca el canario en errores, alertas y registro. |
 | 5 | **Cero riesgo para la operativa del cliente** | Sin dependencia en tiempo real de sus sistemas; nada se activa sin tu OK; etapas: pruebas → sombra → piloto. | Criterios de salida por etapa (sección 13). |
-| 6 | **Estabilidad** | Idempotencia (cliente + semana ISO + huella del archivo), bloqueo por cliente, recuperación diaria, interruptor general. | Ejecución doble y en paralelo; caída simulada a mitad. |
+| 6 | **Estabilidad** | Idempotencia (cliente + semana ISO de la exportación + huella del archivo), bloqueo por cliente, recuperación diaria, interruptor general. | Ejecución doble y en paralelo; caída simulada a mitad. |
 | 7 | **Falla cerrada** | Fecha ambigua, moneda desconocida o columna ausente → la fila se aparta con un código; si se aparta más del umbral, no se envía informe y se avisa. | Fuzz y propiedades: `aceptadas + apartadas = total` siempre. |
 | 8 | **Modularidad y reutilización** | Módulos puros con contrato de datos + un *shell* por cliente. Añadir un cliente = clonar el shell y su configuración. | Pruebas de contrato por módulo. |
 | 9 | **Infraestructura mínima y aislada** | Sin puertos entrantes, versión de n8n fija, 2FA, nodos peligrosos excluidos. | Lista de verificación del despliegue (sección 10.7). |
@@ -116,12 +117,14 @@ Convención de nombres: `[COB-DEV]` / `[COB-PROD]` + nombre, y etiquetas `cobran
 | Workflow | Tipo | Disparador | Credenciales | Qué hace | Si falla |
 |---|---|---|---|---|---|
 | **Shell del cliente** (uno por cliente) | Entrada/salida | Programado, diario 08:30 `America/Montevideo` | Cuenta de servicio de Drive (solo ese cliente) y envío de correo | Orquesta: configuración, guardias, lectura, libro, módulos, envío. Es **el único** lugar con entrada/salida. | Error Trigger → alerta saneada. Nada parcial se envía. |
-| **M0 Guardias globales** | Utilidad | Sub-workflow | Ninguna (lee una tabla) | Devuelve `{permitido, dry_run}` desde el interruptor general. | Falla cerrada: sin respuesta = no se procesa. |
+| **M0 Guardias y configuración** | Puro | Sub-workflow | Ninguna | Convierte la fila del interruptor general en `{permitido, dry_run}` (ante un valor raro no se procesa y se ensaya) y valida la configuración del cliente devolviendo **todos** los problemas juntos. | Falla cerrada: sin respuesta = no se procesa. |
 | **M1 Normalizar tabla** | Puro | Sub-workflow | Ninguna | Filas crudas → facturas normalizadas + filas apartadas con código. | Código de error sin valores. |
 | **M2 Antigüedad y escalones** | Puro | Sub-workflow | Ninguna | Días de atraso, tramos, totales por moneda, escalón sugerido. | Idem. |
 | **M3 Borradores** | Puro | Sub-workflow | Ninguna | Texto por plantilla, enlaces de WhatsApp y correo. Bloquea plantillas rotas. | Idem. |
 | **M4 Informe** | Puro | Sub-workflow | Ninguna | Página HTML autocontenida (informe completo) y texto de resumen solo con totales. | Idem. |
 | **M5 Guardia de envío** | Puro | Sub-workflow | Ninguna | Filtra los destinatarios solicitados contra la lista blanca; aplica `DRY_RUN`. | Bloquea y alerta. |
+| **M6 Registro y alertas** | Puro | Sub-workflow | Ninguna | Sanea errores (solo el código), arma la alerta, valida la fila del libro (columnas fijas), calcula la clave de idempotencia y decide qué hacer según el libro y el bloqueo. | Código de error sin valores. |
+| **M7 Ingesta** | Puro | Sub-workflow | Ninguna | Elige el archivo de la carpeta (tipo, tamaño, antigüedad, el más reciente; un empate es «ambiguo»), verifica la descarga y decide el aviso semanal de «no llegó». Nunca devuelve nombres de archivo. | Idem. |
 | **Alertas** | Infraestructura | Error Trigger | Correo | Convierte un error en un aviso saneado (cliente, workflow, nodo, código, id de ejecución). | — |
 | **Latido** | Infraestructura | Programado semanal | Correo | Te envía «Cobranza OK». Si un lunes no llega, algo se cayó. | Lo detectas tú por ausencia. |
 | **Limpieza** | Infraestructura | Programado mensual | Ninguna | Borra del libro filas de más de 13 meses. | Alerta. |
@@ -144,17 +147,23 @@ be called by*). Se confirma en la versión desplegada.
 
 ```
 cliente_id            "c001"
-destinatarios_permitidos  ["dueno@cliente-ejemplo.example"]   lista blanca (1 a 3)
+empresa               { nombre, medios_pago?, firma? }   datos que aparecen en los mensajes
+destinatarios_permitidos  ["dueno@cliente-ejemplo.example"]   lista blanca (1 a 3), en forma canónica
+remitente_prueba      "tu-bandeja@…"   adonde va todo lo que se ensaya
 entrega               "correo_completo" | "enlace_salida"
-zona_horaria          "America/Montevideo"
-carpeta_entrada_id    (ID de Drive) · patron_nombre_archivo · hoja_xlsx · antiguedad_maxima_archivo_dias 8
-mapeo_columnas        { factura, deudor, importe, moneda, emision, vencimiento, telefono?, correo?, en_disputa? }
+acepta_correo_completo  true   obligatorio si modo "real" y entrega "correo_completo"
+zona_horaria          "America/Montevideo"   (debe existir: con ella se calcula la fecha local)
+carpeta_entrada_id    (ID de Drive) · hoja_xlsx
+patron_nombre_archivo "facturas*" (comodines * y ?) · antiguedad_maxima_archivo_dias 8 · tamano_maximo_bytes 5 000 000
+dia_aviso_sin_archivo 3 (miércoles): desde ese día se avisa, una vez por semana, si no llegó la exportación
+mapeo_columnas        { factura, serie?, deudor, importe, moneda?, emision?, vencimiento, telefono?, correo?, en_disputa? }
 formato_importe       decimal "," · miles "."   (configurable; lo ambiguo se rechaza)
-monedas_admitidas     ["UYU", "USD"]
+monedas_admitidas     ["UYU", "USD"] · moneda_por_defecto?
 tramos                [1,30] [31,60] [61,90] [91,+]
-escalones             amable 1–15 · segundo aviso 16–45 · aviso firme 46+
-umbral_rechazo        5 %
-plantillas            textos con {llaves} y datos de la empresa (nombre, medios de pago, firma)
+escalones             amable 1–15 · segundo aviso 16–45 · aviso firme 46+   (cada uno necesita su plantilla)
+umbral_rechazo        5 %   (0 a 100)
+limites · rango_vencimiento · ignorar_filas_de_total   máximo de filas y de largo de celda; años admitidos; filas «Total»
+plantillas            textos con {llaves}; por defecto: formales, en plural, sin amenazas
 modo                  "dry_run" (por defecto) | "real"
 ```
 
@@ -171,8 +180,8 @@ fila_origen       12              trazabilidad
 ```
 
 **Fila apartada:** `{ fila: 12, codigo: "E_FECHA_AMBIGUA" }`. **El código nunca lleva el valor.**
-Códigos: `E_FECHA_AMBIGUA`, `E_FECHA_INVALIDA`, `E_IMPORTE_INVALIDO`, `E_IMPORTE_NO_POSITIVO`,
-`E_MONEDA_DESCONOCIDA`, `E_REF_VACIA`, `E_DUPLICADA`, `E_COLUMNA_FALTANTE`.
+Ejemplos: `E_FECHA_AMBIGUA`, `E_IMPORTE_INVALIDO`, `E_MONEDA_DESCONOCIDA`, `E_REF_VACIA`, `E_DUPLICADA`,
+`E_COLUMNA_FALTANTE`. El catálogo completo, con qué hacer ante cada uno, está en [`../nucleo/CODIGOS.md`](../nucleo/CODIGOS.md).
 
 **Informe:** `{ asunto, html_completo, texto_resumen }`. El resumen solo contiene totales por moneda,
 tramos y número de filas apartadas.
@@ -230,15 +239,23 @@ nombres ni contactos.
 
 | Tabla | Columnas | Para qué |
 |---|---|---|
-| `cob_ejecuciones` | `clave` (cliente + semana ISO + huella), `cliente_id`, `semana_iso`, `hash_archivo`, `estado` (`ok`, `error`, `omitida`), `iniciada_utc`, `terminada_utc`, `n_filas`, `n_vencidas`, `n_apartadas`, `codigo_error`, `modo` | Idempotencia y trazabilidad. Solo contadores; la fila se escribe **al terminar**. |
+| `cob_ejecuciones` | `clave` (cliente + semana ISO de la exportación + huella), `cliente_id`, `semana_iso`, `hash_archivo`, `estado` (`ok`, `incidencia`, `error`, `omitida`), `iniciada_utc`, `terminada_utc`, `n_filas`, `n_vencidas`, `n_apartadas`, `codigo_error`, `modo` | Idempotencia y trazabilidad. Solo contadores; la fila se escribe **al terminar**. |
 | `cob_bloqueos` | `cliente_id`, `expira_utc` | Evitar dos ejecuciones simultáneas de un mismo cliente. |
 | `cob_config_global` | `interruptor`, `dry_run`, `actualizado_utc` | Apagar todo o pasar todo a ensayo con un cambio. |
 
 Reglas:
-1. **Huella** = SHA-256 del contenido del archivo. Mismo archivo, misma semana → `omitida`. Un archivo
-   corregido (huella distinta) sí se procesa: es un informe nuevo, útil. Además el archivo debe haberse
-   **modificado en los últimos 8 días** (configurable): uno más antiguo se trata como «no llegó», para
-   no repetir cada semana un informe con datos viejos.
+1. **Huella y semana de la exportación.** La huella es el SHA-256 del contenido del archivo. Un archivo no se
+   informa dos veces: basta una fila `ok` o `incidencia` con la misma clave (cliente + semana de la exportación +
+   huella); una fila `error` no cuenta, así se reintenta.
+   - La semana es la de la **exportación** (el día local en que se modificó el archivo), no la de la
+     ejecución: así un archivo que sigue fresco al cruzar el lunes no genera un segundo informe. *Corregido
+     durante la Etapa 1: con la semana de la ejecución y la ventana de 8 días, un mismo archivo podía
+     informarse dos veces.*
+   - Un archivo corregido (huella distinta) sí se procesa: es un informe nuevo, útil. Si el cliente vuelve
+     a exportar la semana siguiente, aunque el contenido sea idéntico, también hay informe nuevo
+     (cadencia semanal).
+   - El archivo debe haberse **modificado en los últimos 8 días** (configurable): uno más antiguo se
+     trata como «no llegó», para no repetir cada semana un informe con datos viejos.
 2. **Bloqueo** con caducidad (por ejemplo 30 minutos). Una ejecución interrumpida se detecta porque
    su bloqueo caduca sin que exista fila en el libro: entonces se avisa y **no se reintenta solo**.
    El shell libera el bloqueo al terminar, con éxito o con error.
@@ -250,8 +267,12 @@ Reglas:
    duplicado raro (el envío salió y el marcado falló) antes que perder un informe; como el único
    destinatario es el dueño, un duplicado es inocuo.
 5. **Recuperación diaria.** El disparador es diario, no semanal: si el servidor estuvo caído el
-   lunes, el martes lo recoge. Si el miércoles no ha llegado archivo, se envía al dueño un aviso
-   fijo «no encontramos la exportación de esta semana» (también solo a la lista blanca).
+   lunes, el martes lo recoge. Si el miércoles (`dia_aviso_sin_archivo`, configurable) no ha llegado
+   archivo, se envía al dueño un aviso fijo «no encontramos la exportación de esta semana» (también
+   solo a la lista blanca), **una sola vez por semana**: queda como fila `incidencia` con la huella de
+   ceros («sin archivo») y código `E_SIN_ARCHIVO`. Un archivo ilegible se avisa igual, una vez por
+   archivo (`incidencia` con el código del motivo). Si hay dos archivos aptos con el mismo instante más
+   reciente no se elige ninguno: se avisa a Javier (`E_ARCHIVO_AMBIGUO`).
 6. **Retención:** el libro conserva 13 meses (propuesta) y `Limpieza` borra lo anterior.
 7. **Fin de contrato:** se borran el shell, la credencial, la cuenta de servicio y las filas del
    libro del cliente, y se confirma por escrito. La [Ley 18.331 art. 30](https://www.impo.com.uy/bases/leyes/18331-2008)
@@ -502,7 +523,7 @@ transferencia a un Estado sin nivel adecuado para los datos de los deudores. Tam
 | Etapa | Qué se hace | Requiere de ti | Sale cuando |
 |---|---|---|---|
 | **0 · Diseño** | Este documento, el plan de entrevistas y los criterios de la lista. | **Punto de control 2**: revisado el 30-sep-2026 con ajustes (15 entrevistas; Oracle en São Paulo). | Hecho, con las decisiones abiertas de la sección 16. |
-| **1 · Núcleo puro** | Módulos M1 a M5 en JavaScript, generador de datos ficticios, pruebas de los niveles 1 a 6, informe HTML de ejemplo. Todo local en el repositorio: sin n8n, sin datos reales, sin contactar a nadie. | **Autorizada el 30-sep**; arranca cuando resuelvas las preguntas previas. Corre **en paralelo** a las entrevistas y da una demostración realista. | Criterios de salida de la sección 11. |
+| **1 · Núcleo puro** | Módulos M0 a M7 y su cableado en JavaScript, generador de datos ficticios, simulador del flujo diario, pruebas de los niveles 1 a 6, informe HTML de ejemplo. Todo local en el repositorio: sin n8n, sin datos reales, sin contactar a nadie. | **Terminada el 30-sep** ([`../nucleo/`](../nucleo/)). Corre **en paralelo** a las entrevistas y da una demostración realista (`nucleo/demo/`). | Hecho: criterios de salida de la sección 11 cumplidos para el núcleo. |
 | **2 · n8n de pruebas** | Shell y sub-workflows en tu instancia de Oracle (São Paulo) como banco de pruebas, datos ficticios, envío solo a tu bandeja; nivel 7. | Instancia autorizada el 30-sep; **pediré tu OK para arrancar la etapa** al terminar la 1. Credenciales creadas por ti. | Nada activo salvo tus ensayos; **Punto de control 3** con guía manual. |
 | **3 · Sombra** | Datos reales de un cliente que confirmó interés, con informe enmascarado. | Cliente que confirma interés real · **unipersonal en BPS/DGI** antes de tocar sus sistemas o facturar · contrato de encargo · inscripción de la base · **región y transferencias resueltas (São Paulo no vale sin más)** · evaluación de impacto documentada. | El informe coincide con el cálculo manual del cliente varias semanas seguidas. |
 | **4 · Piloto** | Informe real al dueño, en modo `enlace_salida`. | **Punto de control 4** («antes del envío final»): tu autorización expresa. | Un ciclo completo sin incidentes. |
@@ -561,7 +582,7 @@ Necesito tu decisión en estos puntos; **hasta entonces no toco nada**.
 | # | Decisión | Opciones | Mi recomendación | Estado (30-sep) |
 |---|---|---|---|---|
 | D1 | ¿La instancia de n8n conectada es tu servidor de Oracle? ¿Puedo usarla como **banco de pruebas** con datos ficticios, prefijo `[COB-DEV]` y nada activo? | Sí / No / Otra instancia | Usarla solo como pruebas; PROD separada. | **Respondida: sí, es tu servidor de Oracle (30-sep).** Autorizada como banco de pruebas. |
-| D2 | Alcance inmediato | (a) Solo diseño; (b) empezar la Etapa 1 (núcleo puro, local, sin contactar a nadie) en paralelo a las entrevistas | (b) | **Respondida: (b).** Arranca tras las preguntas previas. |
+| D2 | Alcance inmediato | (a) Solo diseño; (b) empezar la Etapa 1 (núcleo puro, local, sin contactar a nadie) en paralelo a las entrevistas | (b) | **Respondida: (b). Etapa 1 hecha (30-sep).** La Etapa 2 espera tu OK. |
 | D3 | Canal de entrada | A · Drive con cuenta de servicio · B · buzón · C · manual | A; C para el primer piloto. | Abierta (no bloquea la Etapa 1). |
 | D4 | Modo de entrega con datos reales | `correo_completo` · `enlace_salida` | `enlace_salida` (un destinatario equivocado solo vería totales). | Abierta (no bloquea la Etapa 1). |
 | D5 | Remitente | Gmail personal (solo ficticios) · dominio propio con buzón profesional | Dominio propio antes de datos reales. | Abierta. |

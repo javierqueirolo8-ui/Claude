@@ -40,7 +40,7 @@ function construir() {
   const p = plano(Cobranza.preparar({ config, guardias, fecha_corte: FECHA_CORTE, contenido: { formato: 'csv', texto: csv }, demo: true }));
   if (p.tipo !== 'informe') throw new Error('la demostración no produjo un informe');
   const envio = plano(Cobranza.armarEnvio({
-    config, guardias, fecha_corte: FECHA_CORTE, tipo: 'informe', preparado: p, hash_archivo: 'e'.repeat(64), enlace_informe: ENLACE_EJEMPLO,
+    config, guardias, fecha_corte: FECHA_CORTE, fecha_exportacion: FECHA_CORTE, tipo: 'informe', preparado: p, hash_archivo: 'e'.repeat(64), enlace_informe: ENLACE_EJEMPLO,
     iniciada_utc: '2026-10-05T11:30:00Z', terminada_utc: '2026-10-05T11:30:02Z'
   }));
 

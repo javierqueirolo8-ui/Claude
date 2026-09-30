@@ -218,6 +218,13 @@ test('entradas que rompen el contrato se detienen con código', () => {
   assert.equal(c({ vencidas: [null], empresa: EMPRESA }), 'E_FACTURA_INVALIDA');
 });
 
+test('un escalón sin plantilla se detiene, incluso si se llama como una propiedad interna de los objetos', () => {
+  const base = { factura_ref: 'A1', deudor_nombre: 'X', moneda: 'UYU', importe_centavos: 100000, vencimiento: '2026-09-01', dias_atraso: 34, escalon: 'inexistente', fila_fuente: 2 };
+  for (const escalon of ['inexistente', 'constructor', 'tostring', 'valueof']) {
+    assert.equal(capturar(() => M3.generarBorradores({ vencidas: [{ ...base, escalon }], empresa: EMPRESA })).codigo, 'E_PLANTILLA_FALTANTE', escalon);
+  }
+});
+
 test('una referencia de factura sin normalizar no llega a un mensaje: se detiene', () => {
   const base = { factura_ref: 'A1', deudor_nombre: 'X', moneda: 'UYU', importe_centavos: 100000, vencimiento: '2026-09-01', dias_atraso: 34, escalon: 'segundo_aviso', fila_origen: 2 };
   const c = (ref) => capturar(() => M3.generarBorradores({ vencidas: [{ ...base, factura_ref: ref }], empresa: EMPRESA })).codigo;

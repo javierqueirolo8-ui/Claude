@@ -65,6 +65,7 @@ opera el sistema (recibe el código en la alerta). «Fila» = se cuenta en «fil
 
 | Código | Qué pasó |
 |---|---|
+| `E_CFG_INVALIDA` | El arranque se detuvo porque la configuración del cliente tiene problemas; la alerta trae, además, la lista de códigos a corregir. |
 | `E_CFG_CLIENTE` | La configuración no es un objeto. |
 | `E_CFG_CLIENTE_ID` | `cliente_id` vacío, con símbolos o de más de 40 caracteres. |
 | `E_CFG_DESTINATARIOS_TAMANO` | La lista blanca no tiene entre 1 y 3 direcciones. |

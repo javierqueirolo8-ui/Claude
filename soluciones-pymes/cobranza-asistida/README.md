@@ -1,8 +1,9 @@
 # Cobranza asistida de facturas vencidas · Uruguay
 
-**Estado (30-sep-2026): diseño ajustado; Etapa 1 autorizada, pendiente de arrancar.** Ajustes pedidos
-aplicados: **15 entrevistas** para decidir la viabilidad y Oracle en **São Paulo**. No se ha construido,
-activado ni ejecutado nada, no se ha tocado producción y **no se ha contactado a nadie**.
+**Estado (30-sep-2026): diseño ajustado y Etapa 1 terminada; la Etapa 2 espera tu OK.** Ajustes
+aplicados: **15 entrevistas** para decidir la viabilidad y Oracle en **São Paulo**. El **núcleo de código**
+(puro, sin red, con datos inventados y sus pruebas) está en [`nucleo/`](nucleo/). En tu n8n no se ha
+construido, activado ni ejecutado nada, no se ha tocado producción y **no se ha contactado a nadie**.
 
 Servicio para pymes uruguayas que **facturan a crédito a otras empresas** y pierden caja y tiempo
 porque nadie reclama a tiempo. Cada semana, a partir de una exportación que el propio cliente deja
@@ -33,6 +34,7 @@ deudor.
 | [`docs/01-plan-validacion.md`](docs/01-plan-validacion.md) | Plan de entrevistas: hipótesis, a quién, cómo llegar, guion, escalera de compromiso, reglas de decisión fijadas de antemano y borradores de invitación (**no enviados**). |
 | [`docs/02-criterios-lista-objetivo.md`](docs/02-criterios-lista-objetivo.md) | Cómo armar la lista de empresas de Uruguay: perfil, fuentes permitidas y prohibidas, la regla de **no inventar correos**, protocolo de primer contacto, bases de datos y derechos. |
 | [`docs/03-arquitectura-n8n.md`](docs/03-arquitectura-n8n.md) | Arquitectura modular en n8n: alcance, módulos, contratos, seguridad y privacidad por diseño, infraestructura, pruebas, etapas, riesgos y decisiones abiertas. |
+| [`nucleo/`](nucleo/) | **El código** (Etapa 1): módulos puros M0 a M7 y su cableado, generador de datos ficticios, simulador del flujo diario, más de 340 pruebas, informe de demostración y `verificar.sh`. Empezar por su [README](nucleo/README.md). |
 | [`plantillas/`](plantillas/) | Plantillas **vacías**: notas de entrevista, registro de hipótesis y lista objetivo. |
 
 ## Reglas que no se rompen
@@ -53,7 +55,7 @@ deudor.
 | # | Punto | Estado |
 |---|---|---|
 | 1 | Tras la investigación de nichos | Hecho: nicho 1 elegido, Uruguay, RecordaCitas archivado. |
-| 2 | **Tras el diseño** | **Revisado con ajustes** (15 entrevistas; Oracle en São Paulo). Etapa 1 autorizada. Decisiones abiertas en la [sección 16 del documento 03](docs/03-arquitectura-n8n.md#16-decisiones-abiertas). |
+| 2 | **Tras el diseño** | **Revisado con ajustes** (15 entrevistas; Oracle en São Paulo). **Etapa 1 hecha**; la Etapa 2 (flujo en tu n8n, solo datos ficticios) espera tu OK. Decisiones abiertas en la [sección 16 del documento 03](docs/03-arquitectura-n8n.md#16-decisiones-abiertas). |
 | 3 | Tras el desarrollo | Pendiente. Incluirá la guía de verificación manual para no técnicos. |
 | 4 | Antes del envío final | Pendiente. |
 

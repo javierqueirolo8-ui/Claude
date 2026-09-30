@@ -60,7 +60,8 @@ var M1 = (function () {
       var c = candidatos(v);
       if (!c) Util.fallar('E_CFG_MAPEO');
       c.forEach(function (k) {
-        if (claves[k] && claves[k] !== campo) Util.fallar('E_CFG_MAPEO'); // una columna, un solo significado
+        if (Object.prototype.hasOwnProperty.call(claves, k) && claves[k] !== campo) Util.fallar('E_CFG_MAPEO'); // una columna, un solo significado
+        // (hasOwnProperty: un título llamado «constructor» no es una columna repetida)
         claves[k] = campo;
       });
       porCampo[campo] = c;
