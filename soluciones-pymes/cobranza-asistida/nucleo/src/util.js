@@ -393,6 +393,12 @@ var Util = (function () {
 
   /* ----------------------------------------------------------- identificadores */
 
+  // Número de factura ya normalizado (lo que produce M1): mayúsculas, dígitos y . / _ - con espacios sueltos, hasta 40.
+  // Es lo único que M2 y M3 aceptan; una referencia con saltos de línea o controles jamás llega a un mensaje.
+  function refValida(s) {
+    return typeof s === 'string' && s.length <= 40 && /^[A-Z0-9][A-Z0-9 ./_-]*$/.test(s) && s.indexOf('  ') < 0 && s.charAt(s.length - 1) !== ' ';
+  }
+
   function idValido(s) { return typeof s === 'string' && /^[a-z0-9][a-z0-9_-]{0,39}$/i.test(s); }
   function hex64(s) { return typeof s === 'string' && /^[0-9a-f]{64}$/.test(s); }
 
@@ -406,6 +412,6 @@ var Util = (function () {
     formatearNumero: formatearNumero, agruparMiles: agruparMiles, LIMITE_CENTAVOS: LIMITE_CENTAVOS,
     normalizarCorreo: normalizarCorreo, normalizarTelefono: normalizarTelefono,
     NUMEROS_EJEMPLO: NUMEROS_EJEMPLO, esNumeroDeEjemplo: esNumeroDeEjemplo,
-    idValido: idValido, hex64: hex64
+    refValida: refValida, idValido: idValido, hex64: hex64
   };
 })();

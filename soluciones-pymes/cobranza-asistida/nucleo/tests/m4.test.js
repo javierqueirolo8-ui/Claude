@@ -16,9 +16,10 @@ const venc = (ref, dias, extra = {}) => ({
 });
 const LECTURA_OK = { resumen: { total: 0, aceptadas: 0, apartadas: 0, vacias: 0, totales_ignorados: 0, tasa_apartadas: 0, umbral_rechazo: 5, bloquear: false, motivo_bloqueo: null }, apartadas: [], avisos: [], por_codigo: {} };
 
-function armar(facturas, { lectura = LECTURA_OK, opciones, borrador } = {}) {
+function armar(facturas, { lectura = LECTURA_OK, opciones, borrador, posterior } = {}) {
   const ant = plano(M2.calcularAntiguedad({ facturas, fecha_corte: CORTE }));
   const bor = plano(M3.generarBorradores({ vencidas: ant.vencidas, empresa: EMPRESA, opciones: opciones && { demo: opciones.demo } }));
+  if (posterior) posterior(ant, bor); // para simular valores que una etapa anterior habría rechazado
   const entrada = { fecha_corte: CORTE, empresa: { nombre: EMPRESA.nombre }, antiguedad: ant, borradores: borrador ? borrador(bor) : bor, lectura, opciones };
   return { ant, bor, entrada, informe: plano(M4.armarInforme(entrada)) };
 }
@@ -55,7 +56,8 @@ test('el contenido del archivo se escapa: ni etiquetas ni atributos inyectados',
   assert.ok(h.includes('&#39;single&#39;'));
   assert.ok(h.includes('&amp;amp;'));
   // lo mismo si llegaran valores hostiles en campos que M1 ya habría rechazado
-  const raro = armar([venc('A"><b>x</b>', 10)]).informe.html_completo;
+  const RARA = 'A"><b>x</b>';
+  const raro = armar([venc('A', 10)], { posterior: (ant, bor) => { ant.vencidas[0].factura_ref = RARA; bor.borradores[0].factura_ref = RARA; } }).informe.html_completo;
   assert.equal(raro.includes('<b>'), false);
   assert.deepEqual(problemasDeEtiquetas(raro), []);
 });
@@ -192,7 +194,7 @@ test('muchas filas no leídas: se recortan los números de fila', () => {
 });
 
 test('correo con enlace: solo totales y un enlace de Drive o Docs', () => {
-  const { informe } = armar([venc('Secreta', 10, { deudor_nombre: 'Nombre Secreto' })]);
+  const { informe } = armar([venc('SECRETA', 10, { deudor_nombre: 'Nombre Secreto' })]);
   const enlace = 'https://drive.google.com/file/d/1AbCdEfGhIjK/view?usp=sharing';
   const c = plano(M4.armarCorreoConEnlace({ texto_resumen: informe.texto_resumen, enlace, asunto: informe.asunto }));
   assert.ok(c.cuerpo_texto.includes(enlace));

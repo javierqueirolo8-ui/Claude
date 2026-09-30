@@ -40,7 +40,7 @@ var Cobranza = (function () {
 
   /* ------------------------------------------------------- configuración */
 
-  // Revisa TODO lo que puede estar mal en la configuración de un cliente y devuelve los códigos juntos.
+  // Revisa todo lo que puede estar mal en la configuración de un cliente y devuelve los códigos juntos.
   // No mira ningún dato del cliente. Si no está bien, la ejecución no empieza.
   function validarConfiguracion(config, fechaCorte) {
     if (!esObjeto(config)) return { ok: false, problemas: ['E_CFG_CLIENTE'] };
@@ -196,8 +196,7 @@ var Cobranza = (function () {
     var texto = M6.textoAlerta(sano);
     // La alerta va solo a Javier; no depende del ensayo (no lleva datos del cliente) pero pasa por la misma guardia.
     var envio = M5.guardiaEnvio({
-      solicitados: [e.operador], lista_blanca: [e.operador], guardias: { permitido: true, dry_run: false },
-      modo_cliente: 'real', remitente_prueba: e.operador
+      solicitados: [e.operador], lista_blanca: [e.operador], guardias: { permitido: true, dry_run: false }, modo_cliente: 'real'
     });
     return { sano: sano, texto: texto, envio: envio };
   }

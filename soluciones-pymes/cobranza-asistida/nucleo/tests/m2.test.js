@@ -103,6 +103,36 @@ test('configuración de tramos y escalones inválida: se detiene con código', (
   assert.equal(e([{ nombre: 'uno', desde: 1, hasta: 5 }]), 'E_CFG_ESCALONES');
 });
 
+test('una suma que se saldría del rango seguro se detiene en vez de perder precisión', () => {
+  const L = Util.LIMITE_CENTAVOS;
+  // 1000 facturas al límite en un solo tramo: se desborda la suma del tramo (y la del total)
+  const enUnTramo = Array.from({ length: 1000 }, (_, i) => fac('G' + i, 'UYU', L, 10));
+  assert.equal(capturar(() => M2.calcularAntiguedad({ facturas: enUnTramo, fecha_corte: CORTE })).codigo, 'E_DESBORDE');
+  // repartidas en cuatro tramos, cada tramo cabe pero el TOTAL de la moneda no: también se detiene
+  const repartidas = [10, 40, 70, 100].flatMap((dias, t) => Array.from({ length: 600 }, (_, i) => fac('T' + t + '-' + i, 'UYU', L, dias)));
+  assert.equal(capturar(() => M2.calcularAntiguedad({ facturas: repartidas, fecha_corte: CORTE })).codigo, 'E_DESBORDE');
+  // justo por debajo del máximo seguro, todo cuadra
+  const suficientes = Array.from({ length: 900 }, (_, i) => fac('S' + i, 'UYU', L, 10));
+  const r = calc(suficientes);
+  assert.equal(r.totales.UYU.total_centavos, 900 * L);
+  assert.equal(r.por_tramo.UYU[0].total_centavos, 900 * L);
+});
+
+test('un importe sobre el límite seguro se rechaza; justo en el límite se acepta', () => {
+  const mala = (c) => capturar(() => M2.calcularAntiguedad({ facturas: [fac('A', 'UYU', c, 5)], fecha_corte: CORTE })).codigo;
+  assert.equal(mala(Util.LIMITE_CENTAVOS + 1), 'E_FACTURA_INVALIDA');
+  assert.equal(mala(Number.MAX_SAFE_INTEGER), 'E_FACTURA_INVALIDA');
+  assert.equal(mala(Util.LIMITE_CENTAVOS), undefined);
+});
+
+test('el número de factura debe venir normalizado: mayúsculas, sin saltos de línea ni controles', () => {
+  const mala = (ref) => capturar(() => M2.calcularAntiguedad({ facturas: [{ ...fac('A', 'UYU', 100, 5), factura_ref: ref }], fecha_corte: CORTE })).codigo;
+  for (const ref of ['a1', 'A\n1', 'A\r\n1', 'A' + String.fromCharCode(0) + '1', 'A\t1', ' A1', 'A1 ', 'A  1', 'A<1>', 'A'.repeat(41), '-A1', 5, null, undefined]) {
+    assert.equal(mala(ref), 'E_FACTURA_INVALIDA', JSON.stringify(ref));
+  }
+  for (const ref of ['A1', 'A 1001', 'B-2026/15', 'X.1_2', 'A'.repeat(40)]) assert.equal(mala(ref), undefined, ref);
+});
+
 test('entradas que rompen el contrato con M1 se detienen con código', () => {
   const c = (entrada) => capturar(() => M2.calcularAntiguedad(entrada)).codigo;
   assert.equal(c(null), 'E_FACTURAS_INVALIDAS');

@@ -102,6 +102,15 @@ test('sin «modo» se toma el ensayo; sin umbral tampoco es un problema', () => 
   assert.deepEqual(validar(c), { ok: true, problemas: [] });
 });
 
+test('sin «modo», la configuración es de ensayo: el informe completo por correo no exige aceptación', () => {
+  const c = CFG();
+  delete c.modo;
+  c.entrega = 'correo_completo';
+  assert.deepEqual(validar(c), { ok: true, problemas: [] });
+  c.modo = 'real';
+  assert.deepEqual(validar(c).problemas, ['E_CFG_ENTREGA_REAL']);
+});
+
 test('lo que no es un objeto no es una configuración', () => {
   for (const v of [null, undefined, 'x', 5, [], true]) {
     assert.deepEqual(validar(v), { ok: false, problemas: ['E_CFG_CLIENTE'] });

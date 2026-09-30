@@ -175,7 +175,7 @@ function hostilesA(fechaCorte) {
     { esperado: 'aceptada', celdas: fila('H-9007', 'Cliente\ncon salto de línea', '1.000,00', 'UYU', '', venc, '', '', '') },
     { esperado: 'aceptada', celdas: fila('H-9008', 'Cliente con emoji \u{1F600} y ñandú', '1.000,00', 'UYU', '', venc, '', '', '') },
     { esperado: 'aceptada', celdas: fila('H-9009', 'Cliente con aviso', '1.000,00', 'UYU', '', venc, '099 000 002', 'no-es-un-correo', 'quizás') },
-    { esperado: 'aceptada', celdas: fila('H-9010', 'Cliente con teléfono raro', '1.000,00', 'UYU', '', venc, '12345', 'a@b.c', '') },
+    { esperado: 'aceptada', celdas: fila('H-9010', 'Cliente con teléfono raro', '1.000,00', 'UYU', '', venc, '12345', 'a b@ficticio.example', '') },
     { esperado: 'apartada', codigos: ['E_IMPORTE_NO_POSITIVO'], celdas: fila('H-9011', 'Cliente', '-1.000,00', 'UYU', '', venc, '', '', '') },
     { esperado: 'apartada', codigos: ['E_IMPORTE_NO_POSITIVO'], celdas: fila('H-9012', 'Cliente', '0,00', 'UYU', '', venc, '', '', '') },
     { esperado: 'apartada', codigos: ['E_IMPORTE_INVALIDO', 'E_MONEDA_DESCONOCIDA'], celdas: fila('H-9013', 'Cliente', 'mucho', 'UYU', '', venc, '', '', '') },

@@ -199,7 +199,7 @@ var M3 = (function () {
   }
 
   function validarVencida(v) {
-    if (!v || typeof v !== 'object' || typeof v.factura_ref !== 'string' || !v.factura_ref ||
+    if (!v || typeof v !== 'object' || !Util.refValida(v.factura_ref) ||
         typeof v.escalon !== 'string' || !/^[a-z][a-z_]{1,29}$/.test(v.escalon) ||
         !(typeof v.dias_atraso === 'number' && Math.floor(v.dias_atraso) === v.dias_atraso && v.dias_atraso >= 1) ||
         !Util.esISO(v.vencimiento)) Util.fallar('E_FACTURA_INVALIDA');

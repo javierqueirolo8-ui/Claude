@@ -6,7 +6,7 @@ const { problemasDeEtiquetas } = require('./html-seguro');
 const gen = require('../datos-ficticios/generador');
 const { configEjemplo } = require('../datos-ficticios/config-ejemplo');
 
-const { Util, M6, M7, Cobranza } = cargar('util', 'm0-guardias', 'm1-normalizar', 'm2-antiguedad', 'm3-borradores', 'm4-informe',
+const { Util, M5, M6, M7, Cobranza } = cargar('util', 'm0-guardias', 'm1-normalizar', 'm2-antiguedad', 'm3-borradores', 'm4-informe',
   'm5-guardia-envio', 'm6-registro', 'm7-ingesta', 'pipeline');
 
 const CORTE = '2026-10-05';
@@ -334,6 +334,33 @@ test('si las llaves cambian entre preparar y armar el envío, se detiene (no se 
   const p = preparar({ guardias: ENSAYO });
   assert.equal(codigo(() => Cobranza.armarEnvio({ config: config({ modo: 'real' }), guardias: REAL, fecha_corte: CORTE, tipo: 'informe', preparado: p, hash_archivo: HUELLA, enlace_informe: 'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view', iniciada_utc: AHORA, terminada_utc: FIN })), 'E_INCONSISTENCIA_ENSAYO');
   assert.equal(codigo(() => Cobranza.armarEnvio({ config: config(), guardias: ENSAYO, fecha_corte: CORTE, tipo: 'incidencia', preparado: p, hash_archivo: HUELLA, iniciada_utc: AHORA, terminada_utc: FIN })), 'E_INCONSISTENCIA_ENSAYO');
+});
+
+test('sin «modo» en la configuración se ensaya: el mensaje va a la bandeja de pruebas', () => {
+  const cfg = config();
+  delete cfg.modo;
+  const r = armarEnvio({ guardias: REAL, config: cfg });
+  assert.equal(r.envio.accion, 'redirigir_ensayo');
+  assert.deepEqual(r.envio.destinatarios, ['bandeja.de.pruebas@ejemplo.example']);
+  assert.equal(r.libro.modo, 'dry');
+});
+
+test('si la guardia de envío y la definición de «real» no coinciden, se detiene: jamás se envía con dudas', () => {
+  const original = M5.guardiaEnvio;
+  const enlace = 'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view';
+  try {
+    // una guardia defectuosa que «enviaría de verdad» aunque falte una llave
+    M5.guardiaEnvio = () => ({ accion: 'enviar', destinatarios: ['administracion@ferreteria-ficticia.example'], motivos: [], bloqueados: [] });
+    const enEnsayo = preparar({ guardias: ENSAYO });
+    assert.equal(codigo(() => Cobranza.armarEnvio({ config: config(), guardias: ENSAYO, fecha_corte: CORTE, tipo: 'informe', preparado: enEnsayo, hash_archivo: HUELLA, enlace_informe: enlace, iniciada_utc: AHORA, terminada_utc: FIN })), 'E_INCONSISTENCIA_ENSAYO');
+    // y una que «ensayaría» con todas las llaves abiertas
+    M5.guardiaEnvio = () => ({ accion: 'redirigir_ensayo', destinatarios: ['bandeja.de.pruebas@ejemplo.example'], motivos: ['ENSAYO'], bloqueados: [] });
+    const enReal = preparar({ guardias: REAL, config: config({ modo: 'real' }) });
+    assert.equal(codigo(() => Cobranza.armarEnvio({ config: config({ modo: 'real' }), guardias: REAL, fecha_corte: CORTE, tipo: 'informe', preparado: enReal, hash_archivo: HUELLA, enlace_informe: enlace, iniciada_utc: AHORA, terminada_utc: FIN })), 'E_INCONSISTENCIA_ENSAYO');
+  } finally {
+    M5.guardiaEnvio = original;
+  }
+  assert.equal(armarEnvio().envio.accion, 'redirigir_ensayo', 'la guardia real quedó restaurada');
 });
 
 test('la guardia de envío bloquea con un código propio', () => {

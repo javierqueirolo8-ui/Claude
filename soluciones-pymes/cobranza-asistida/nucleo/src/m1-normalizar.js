@@ -181,10 +181,10 @@ var M1 = (function () {
     return Util.isoDe(y, p.m, d);
   }
 
-  function referencia(txt, largo) {
+  function referencia(txt) {
     var s = Util.limpiar(txt).toUpperCase();
     if (!s) return { ok: false, codigo: 'E_REF_VACIA' };
-    if (s.length > (largo || 40) || !/^[A-Z0-9][A-Z0-9 ./_-]*$/.test(s)) return { ok: false, codigo: 'E_REF_INVALIDA' };
+    if (!Util.refValida(s)) return { ok: false, codigo: 'E_REF_INVALIDA' };
     return { ok: true, ref: s };
   }
 

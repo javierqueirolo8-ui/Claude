@@ -218,6 +218,13 @@ test('entradas que rompen el contrato se detienen con código', () => {
   assert.equal(c({ vencidas: [null], empresa: EMPRESA }), 'E_FACTURA_INVALIDA');
 });
 
+test('una referencia de factura sin normalizar no llega a un mensaje: se detiene', () => {
+  const base = { factura_ref: 'A1', deudor_nombre: 'X', moneda: 'UYU', importe_centavos: 100000, vencimiento: '2026-09-01', dias_atraso: 34, escalon: 'segundo_aviso', fila_origen: 2 };
+  const c = (ref) => capturar(() => M3.generarBorradores({ vencidas: [{ ...base, factura_ref: ref }], empresa: EMPRESA })).codigo;
+  for (const ref of ['A\n1', 'A\r\n1', 'A' + String.fromCharCode(0) + '1', 'A\t1', ' A1 ', 'a1', 'A  1', 'A<b>', '']) assert.equal(c(ref), 'E_FACTURA_INVALIDA', JSON.stringify(ref));
+  assert.equal(c('A 1001'), undefined);
+});
+
 test('el texto de un borrador solo depende de los datos: mismo dato, mismo texto', () => {
   const a = JSON.stringify(borr([venc('A', 33)]).borradores[0].texto);
   const b = JSON.stringify(borr([venc('A', 33)]).borradores[0].texto);

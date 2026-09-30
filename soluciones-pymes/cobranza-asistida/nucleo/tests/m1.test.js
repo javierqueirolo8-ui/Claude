@@ -267,6 +267,13 @@ test('los datos opcionales dudosos avisan pero no rechazan la factura', () => {
   assert.equal(r.avisos.every((a) => a.fila === 2), true);
 });
 
+test('los avisos de una fila que después se aparta (duplicada) no quedan en el resultado', () => {
+  const fila = 'A1;Uno;100;01/09/2026;$U;;12345;;';
+  const r = leer(csv(fila, fila));
+  assert.deepEqual(r.apartadas.map((a) => [a.fila, a.codigo]), [[3, 'E_DUPLICADA']]);
+  assert.deepEqual(r.avisos.map((a) => [a.fila, a.codigo]), [[2, 'A_TEL_INVALIDO']], 'solo el aviso de la fila que sí entró');
+});
+
 test('avisos: teléfono fijo, vencimiento anterior a la emisión', () => {
   const r = leer(csv('A1;X;100;01/09/2026;$U;02/09/2026;2901 0065;;'));
   assert.deepEqual(r.avisos.map((a) => a.codigo).sort(), ['A_TEL_FIJO', 'A_VENCIMIENTO_ANTERIOR_EMISION']);

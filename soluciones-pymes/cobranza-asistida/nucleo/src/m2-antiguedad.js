@@ -71,7 +71,7 @@ var M2 = (function () {
 
   // Un contrato incumplido por quien llama (no por el archivo) detiene el flujo con un código.
   function validarFactura(f) {
-    if (!f || typeof f !== 'object' || typeof f.factura_ref !== 'string' || !f.factura_ref ||
+    if (!f || typeof f !== 'object' || !Util.refValida(f.factura_ref) ||
         typeof f.deudor_nombre !== 'string' || MONEDAS.indexOf(f.moneda) < 0 ||
         !(typeof f.importe_centavos === 'number' && Math.floor(f.importe_centavos) === f.importe_centavos &&
           f.importe_centavos > 0 && f.importe_centavos <= Util.LIMITE_CENTAVOS) ||
