@@ -236,13 +236,16 @@ puede ocultar que casi nadie contestó.
 | 4 a 9 | 15 entrevistas, unas 2 o 3 por semana. Síntesis de 30 minutos cada semana. Bola de nieve al cierre de cada una. Ajustar la lista según lo aprendido. | Cada tanda de contactos, antes. |
 | 10 | Síntesis final y decisión según la sección 8. Si sale AMPLIAR: 2 a 3 semanas más para 5 entrevistas. | Sí. |
 
-**Pendiente de confirmar (respuesta del 30-sep).** El mensaje con las definiciones dejó **sin completar** dos campos entre
-corchetes —las horas semanales y la fecha objetivo de decisión— y habla de «10 a 12 entrevistas» mientras que el
-ajuste del 30-sep fue de **15**. Mientras no se confirme, **rige 15** y el calendario de 10 semanas de arriba.
-Para decidir: con 6 a 8 horas semanales y sin contactos previos, 4 a 5 semanas alcanzan para unas 5 entrevistas hechas o
-agendadas (el punto de control de la semana 4), no para completar la muestra; una decisión a fines de octubre
-solo sería posible con menos entrevistas y más incertidumbre (con 9 de 15 el intervalo de confianza ya es de 36 % a
-80 %).
+**Dedicación (respuesta del 1-oct).** Tendrás **2 a 3 horas por día para arrancar** (unas 14 a 21 por semana), con posibilidad de subirlas si el
+proyecto da resultados. Con eso, las unas 45 horas de más abajo caben en 2 o 3 semanas de tiempo disponible: **el límite pasa a ser cuánta gente responde y
+por qué canales, no las horas.** El tiempo extra conviene gastarlo en los canales que no tienen tope (eventos, LinkedIn 1 a 1 escrito a mano, contadores y bola
+de nieve), no en más correos en frío. El calendario de 10 semanas queda como tope; la decisión puede adelantarse si se cumplen los puntos de control.
+
+**Pendiente de confirmar.** Falta la **fecha objetivo de decisión** (propuesta mía: al final de la semana 8, es decir, hacia el 4 de diciembre si la semana 0 es la
+del 5 de octubre, siempre que se cumplan los puntos de control de las semanas 4 y 6; la semana 10 queda como tope). Además, el mensaje con las definiciones
+del 30-sep habla de «10 a 12 entrevistas» mientras que el ajuste de ese día fue de **15**: mientras no se confirme, **rige 15**. Una decisión a fines de octubre
+exigiría unas 4 entrevistas por semana desde la primera, algo improbable sin contactos previos, o menos entrevistas y más incertidumbre (con 9 de 15 el
+intervalo de confianza ya es de 36 % a 80 %).
 
 **Consulta a la URCDP en espera (D7).** El 30-sep se decidió no consultar a la URCDP/URSEC ni contratar asesoría
 legal hasta tener un cliente en N4 o N5. Mi lectura del art. 29 es que la lista con nombres de personas y las notas
