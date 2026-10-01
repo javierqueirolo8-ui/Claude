@@ -13,6 +13,7 @@ const CORTE = '2026-10-05';
 const AHORA = '2026-10-05T11:30:00Z';
 const FIN = '2026-10-05T11:30:04Z';
 const HUELLA = 'c'.repeat(64);
+const OTRA_HUELLA_PIPE = 'd'.repeat(64);
 const ENSAYO = { permitido: true, dry_run: true };
 const REAL = { permitido: true, dry_run: false };
 const CONTROL_ON = { interruptor: 'on', dry_run: 'true' };
@@ -472,6 +473,305 @@ test('fila de error para el libro: contadores en cero, código y huella «ningun
   assert.equal(plano(Cobranza.filaError({ cliente_id: 'demo-01', codigo: 'E_X1', fecha_corte: CORTE, iniciada_utc: AHORA, terminada_utc: FIN, modo: 'real', hash_archivo: HUELLA })).modo, 'real');
   assert.equal(codigo(() => Cobranza.filaError({ cliente_id: 'demo-01', codigo: 'texto libre con datos', fecha_corte: CORTE, iniciada_utc: AHORA, terminada_utc: FIN })), 'E_LIBRO_INVALIDO');
   assert.equal(codigo(() => Cobranza.filaError(null)), 'E_LIBRO_INVALIDO');
+});
+
+/* ------------------------------------------------ iniciar (lo primero de cada día) */
+
+const BLOQUEO_FILA = (extra = {}) => ({ cliente_id: 'demo-01', expira_utc: '2026-10-05T11:45:00Z', ...extra });
+const iniciar = (extra = {}) => plano(Cobranza.iniciar({ config: config(), filas_control: [CONTROL_ON], filas_bloqueo: [], ahora_utc: AHORA, ...extra }));
+
+test('iniciar: fecha local, interruptor y bloqueo en un solo paso; todo en orden continúa y trae la fila del bloqueo que hay que tomar', () => {
+  const r = iniciar();
+  assert.deepEqual(r, {
+    accion: 'continuar', motivo: null, problemas: [], guardias: { permitido: true, dry_run: true, motivo: null }, fecha_corte: CORTE,
+    bloqueo_nuevo: { cliente_id: 'demo-01', expira_utc: '2026-10-05T12:00:00Z' }
+  });
+  assert.equal(iniciar({ ahora_utc: '2026-10-06T02:59:59Z' }).fecha_corte, '2026-10-05'); // aún es lunes en Montevideo
+  assert.equal(iniciar({ ahora_utc: '2026-10-06T03:00:00Z' }).fecha_corte, '2026-10-06');
+});
+
+test('iniciar: la tabla de control debe tener UNA fila; ninguna, varias o una rara no se procesan', () => {
+  for (const filas of [[], undefined, null, 'x', [CONTROL_ON, CONTROL_ON], [null], ['on'], [[CONTROL_ON]]]) {
+    const r = iniciar({ filas_control: filas });
+    assert.equal(r.accion, 'detener', JSON.stringify(filas));
+    assert.equal(r.motivo, 'SIN_DATOS', JSON.stringify(filas));
+    assert.equal(r.fecha_corte, CORTE);
+  }
+  assert.equal(iniciar({ filas_control: [{ interruptor: 'off', dry_run: 'true' }] }).motivo, 'INTERRUPTOR_APAGADO');
+  assert.equal(iniciar({ filas_control: [{ interruptor: 'on', dry_run: 'false', id: 1, createdAt: 'x' }] }).guardias.dry_run, false);
+});
+
+test('iniciar: sin la lista de filas de bloqueo no se arranca (aunque sea vacía, debe venir)', () => {
+  for (const filas of [undefined, null, 'x', {}, 5]) {
+    assert.equal(codigo(() => Cobranza.iniciar({ config: config(), filas_control: [CONTROL_ON], filas_bloqueo: filas, ahora_utc: AHORA })), 'E_ARRANQUE_INVALIDO', JSON.stringify(filas));
+  }
+  for (const e of [null, undefined, 'x', 5, [], { filas_control: [CONTROL_ON], filas_bloqueo: [], ahora_utc: AHORA }, { config: 'x', filas_bloqueo: [] }]) {
+    assert.equal(codigo(() => Cobranza.iniciar(e)), 'E_ARRANQUE_INVALIDO', JSON.stringify(e));
+  }
+});
+
+test('iniciar: bloqueo activo = omitir, vencido = alertar, varias filas = manda la más lejana', () => {
+  assert.equal(iniciar({ filas_bloqueo: [BLOQUEO_FILA()] }).accion, 'omitir_en_curso');
+  const v = iniciar({ filas_bloqueo: [BLOQUEO_FILA({ expira_utc: '2026-10-05T11:00:00Z' })] });
+  assert.equal(v.accion, 'alertar_bloqueo_vencido');
+  assert.equal(v.motivo, 'BLOQUEO_VENCIDO');
+  assert.equal(v.codigo, 'E_BLOQUEO_VENCIDO');
+  assert.equal('bloqueo_nuevo' in v, false); // solo quien sigue adelante toma el bloqueo
+  assert.equal('bloqueo_nuevo' in iniciar({ filas_bloqueo: [BLOQUEO_FILA()] }), false);
+  assert.equal('bloqueo_nuevo' in iniciar({ filas_control: [{ interruptor: 'off' }] }), false);
+  assert.equal(iniciar({ filas_bloqueo: [BLOQUEO_FILA({ expira_utc: '2026-10-05T11:00:00Z' }), BLOQUEO_FILA()] }).accion, 'omitir_en_curso');
+  assert.equal(iniciar({ filas_bloqueo: [BLOQUEO_FILA({ id: 3, createdAt: 'x', updatedAt: 'y' })] }).accion, 'omitir_en_curso'); // columnas de más de la tabla
+});
+
+test('iniciar: una fila de bloqueo ajena o rota NO lanza un error: devuelve la acción «error» con la fecha ya conocida', () => {
+  for (const fila of [BLOQUEO_FILA({ cliente_id: 'otro-cliente' }), BLOQUEO_FILA({ expira_utc: 'mañana' }), 'x', null]) {
+    const r = iniciar({ filas_bloqueo: [fila] });
+    assert.deepEqual(r, { accion: 'error', motivo: 'ERROR', codigo: 'E_BLOQUEO_INVALIDO', problemas: [], guardias: null, fecha_corte: CORTE }, JSON.stringify(fila));
+  }
+});
+
+test('iniciar: con configuración inválida se detiene con todos los códigos; el interruptor manda sobre la configuración', () => {
+  const r = iniciar({ config: config({ entrega: 'papel', patron_nombre_archivo: '../x' }) });
+  assert.equal(r.accion, 'detener');
+  assert.equal(r.motivo, 'CONFIG_INVALIDA');
+  assert.equal(r.codigo, 'E_CFG_INVALIDA');
+  assert.deepEqual(r.problemas.slice().sort(), ['E_CFG_ENTREGA', 'E_CFG_PATRON']);
+  assert.equal(iniciar({ config: config({ entrega: 'papel' }), filas_control: [{ interruptor: 'off' }] }).motivo, 'INTERRUPTOR_APAGADO');
+});
+
+test('iniciar: un instante o una zona inválidos detienen todo con código (no hay fecha que registrar)', () => {
+  for (const a of ['2026-10-05', 'ahora', null, undefined, 5]) assert.equal(codigo(() => Cobranza.iniciar({ config: config(), filas_control: [CONTROL_ON], filas_bloqueo: [], ahora_utc: a })), 'E_AHORA_INVALIDO', String(a));
+  assert.equal(codigo(() => Cobranza.iniciar({ config: config({ zona_horaria: 'Marte/Olimpo' }), filas_control: [CONTROL_ON], filas_bloqueo: [], ahora_utc: AHORA })), 'E_AHORA_INVALIDO');
+});
+
+test('iniciar equivale a fechaCorteDe + arrancar con las filas ya elegidas', () => {
+  const casos = [
+    { filas_control: [CONTROL_ON], filas_bloqueo: [] },
+    { filas_control: [{ interruptor: 'on', dry_run: 'false' }], filas_bloqueo: [BLOQUEO_FILA()] },
+    { filas_control: [{ interruptor: 'off' }], filas_bloqueo: [] },
+    { filas_control: [CONTROL_ON], filas_bloqueo: [BLOQUEO_FILA({ expira_utc: '2026-10-05T10:00:00Z' })] }
+  ];
+  for (const c of casos) {
+    const directo = plano(Cobranza.arrancar({ config: config(), fila_control: c.filas_control[0], fecha_corte: CORTE, ahora_utc: AHORA, fila_bloqueo: c.filas_bloqueo[0] || null }));
+    const { bloqueo_nuevo, ...resto } = iniciar(c);
+    assert.deepEqual(resto, { ...directo, fecha_corte: CORTE });
+    assert.equal(bloqueo_nuevo !== undefined, directo.accion === 'continuar');
+  }
+});
+
+test('arrancar: el bloqueo llega como una fila o como las filas de la tabla, nunca las dos', () => {
+  const base = { config: config(), fila_control: CONTROL_ON, fecha_corte: CORTE, ahora_utc: AHORA };
+  assert.equal(plano(Cobranza.arrancar({ ...base, filas_bloqueo: [BLOQUEO_FILA()] })).accion, 'omitir_en_curso');
+  assert.equal(plano(Cobranza.arrancar({ ...base, filas_bloqueo: [] })).accion, 'continuar');
+  assert.equal(codigo(() => Cobranza.arrancar({ ...base, filas_bloqueo: [], fila_bloqueo: null })), 'E_ARRANQUE_INVALIDO');
+  assert.equal(codigo(() => Cobranza.arrancar({ ...base, filas_bloqueo: [BLOQUEO_FILA({ cliente_id: 'otro' })] })), 'E_BLOQUEO_INVALIDO');
+  assert.equal(codigo(() => Cobranza.arrancar({ ...base, filas_bloqueo: 'x' })), 'E_BLOQUEO_INVALIDO');
+});
+
+/* ------------------------------------------------- carpeta, claves y libro */
+
+const archivoDrive = (extra = {}) => ({ id: 'ArchivoFicticio0000000001', name: 'facturas-pendientes.csv', mimeType: 'text/csv', size: '4096', modifiedTime: '2026-10-05T09:00:00Z', ...extra });
+
+test('elegirArchivo: elige con la configuración del cliente y nunca devuelve nombres de archivo', () => {
+  const archivos = [archivoDrive(), archivoDrive({ id: 'ArchivoFicticio0000000002', name: 'otra-cosa.csv', modifiedTime: '2026-10-05T10:00:00Z' })];
+  const r = plano(Cobranza.elegirArchivo({ config: config({ patron_nombre_archivo: 'facturas*' }), archivos, fecha_corte: CORTE }));
+  assert.equal(r.estado, 'elegido');
+  assert.equal(r.archivo.id, 'ArchivoFicticio0000000001'); // el patrón del cliente deja fuera al más reciente
+  assert.equal(plano(Cobranza.elegirArchivo({ config: config(), archivos, fecha_corte: CORTE })).archivo.id, 'ArchivoFicticio0000000002'); // con «*», el más reciente
+  assert.equal(JSON.stringify(r).includes('facturas-pendientes'), false);
+  assert.equal(JSON.stringify(r).includes('otra-cosa'), false);
+});
+
+test('elegirArchivo equivale a M7.elegirArchivo con el recorte de configuración; sin archivo apto o con empate lo dice', () => {
+  const archivos = [archivoDrive({ modifiedTime: '2026-09-01T09:00:00Z' }), archivoDrive({ id: 'x'.repeat(20), name: 'foto.png', mimeType: 'image/png' })];
+  const c = config();
+  const directo = plano(M7.elegirArchivo({ archivos, fecha_corte: CORTE, config: { patron_nombre_archivo: c.patron_nombre_archivo, antiguedad_maxima_archivo_dias: c.antiguedad_maxima_archivo_dias, tamano_maximo_bytes: c.tamano_maximo_bytes, zona_horaria: c.zona_horaria } }));
+  assert.deepEqual(plano(Cobranza.elegirArchivo({ config: c, archivos, fecha_corte: CORTE })), directo);
+  assert.equal(directo.estado, 'sin_archivo');
+  const empate = [archivoDrive(), archivoDrive({ id: 'ArchivoFicticio0000000002' })];
+  assert.equal(plano(Cobranza.elegirArchivo({ config: c, archivos: empate, fecha_corte: CORTE })).estado, 'ambiguo');
+});
+
+test('elegirArchivo: entradas rotas fallan con código', () => {
+  for (const e of [null, undefined, 'x', 5, [], { archivos: [], fecha_corte: CORTE }, { config: 'x', archivos: [], fecha_corte: CORTE }]) {
+    assert.equal(codigo(() => Cobranza.elegirArchivo(e)), 'E_INGESTA_INVALIDA', JSON.stringify(e));
+  }
+  assert.equal(codigo(() => Cobranza.elegirArchivo({ config: config(), archivos: 'x', fecha_corte: CORTE })), 'E_INGESTA_INVALIDA');
+  assert.equal(codigo(() => Cobranza.elegirArchivo({ config: config(), archivos: [], fecha_corte: '05/10/2026' })), 'E_INGESTA_INVALIDA');
+});
+
+test('claves del libro: el aviso usa la semana de HOY y la huella de ceros; un archivo, la semana de su exportación y su huella', () => {
+  assert.deepEqual(plano(Cobranza.claveAviso({ cliente_id: 'demo-01', fecha_corte: '2026-10-07' })), { clave: 'demo-01|2026-W41|' + '0'.repeat(64) });
+  assert.deepEqual(plano(Cobranza.claveArchivo({ cliente_id: 'demo-01', fecha_exportacion: '2026-10-04', hash_archivo: HUELLA })), { clave: 'demo-01|2026-W40|' + HUELLA });
+  assert.deepEqual(plano(Cobranza.claveArchivo({ cliente_id: 'demo-01', fecha_exportacion: '2026-10-05', hash_archivo: HUELLA })), { clave: 'demo-01|2026-W41|' + HUELLA });
+});
+
+test('claveArchivo no acepta la huella de «sin archivo»; las claves con datos malos fallan con código', () => {
+  assert.equal(codigo(() => Cobranza.claveArchivo({ cliente_id: 'demo-01', fecha_exportacion: CORTE, hash_archivo: M7.HUELLA_SIN_ARCHIVO })), 'E_LIBRO_INVALIDO');
+  for (const e of [null, undefined, 'x', {}, { cliente_id: 'demo-01', fecha_exportacion: 'ayer', hash_archivo: HUELLA }, { cliente_id: 'demo-01', fecha_exportacion: CORTE, hash_archivo: 'corta' },
+    { cliente_id: '', fecha_exportacion: CORTE, hash_archivo: HUELLA }]) {
+    assert.equal(codigo(() => Cobranza.claveArchivo(e)), 'E_LIBRO_INVALIDO', JSON.stringify(e));
+  }
+  for (const e of [null, undefined, 'x', {}, { cliente_id: 'demo-01', fecha_corte: 'hoy' }, { cliente_id: '', fecha_corte: CORTE }]) {
+    assert.equal(codigo(() => Cobranza.claveAviso(e)), 'E_LIBRO_INVALIDO', JSON.stringify(e));
+  }
+});
+
+test('las claves coinciden con las de las filas del libro que arma armarEnvio', () => {
+  const p = preparar();
+  const hash = 'd'.repeat(64);
+  const r = plano(Cobranza.armarEnvio({ config: config(), guardias: ENSAYO, fecha_corte: CORTE, fecha_exportacion: '2026-10-04', tipo: 'informe', preparado: p, enlace_informe: 'https://drive.google.com/file/d/EjemploFicticio0001/view', hash_archivo: hash, iniciada_utc: AHORA, terminada_utc: FIN }));
+  assert.equal(r.libro.clave, plano(Cobranza.claveArchivo({ cliente_id: 'demo-01', fecha_exportacion: '2026-10-04', hash_archivo: hash })).clave);
+  const s = plano(Cobranza.armarEnvio({ config: config(), guardias: ENSAYO, fecha_corte: CORTE, tipo: 'sin_archivo', hash_archivo: M7.HUELLA_SIN_ARCHIVO, iniciada_utc: AHORA, terminada_utc: FIN }));
+  assert.equal(s.libro.clave, plano(Cobranza.claveAviso({ cliente_id: 'demo-01', fecha_corte: CORTE })).clave);
+});
+
+test('decidirAviso: espera hasta el día de aviso, avisa una sola vez por semana y reintenta si el último intento falló', () => {
+  const miercoles = '2026-10-07';
+  const lunes = '2026-10-05';
+  const clave = (f) => plano(Cobranza.claveAviso({ cliente_id: 'demo-01', fecha_corte: f })).clave;
+  const fila = (f, estado) => ({ clave: clave(f), estado });
+  assert.deepEqual(plano(Cobranza.decidirAviso({ config: config(), fecha_corte: lunes, filas_libro: [] })), { decision: 'esperar', clave: clave(lunes) });
+  assert.deepEqual(plano(Cobranza.decidirAviso({ config: config(), fecha_corte: miercoles, filas_libro: [] })), { decision: 'avisar', clave: clave(miercoles) });
+  assert.equal(plano(Cobranza.decidirAviso({ config: config(), fecha_corte: miercoles, filas_libro: [fila(miercoles, 'incidencia')] })).decision, 'omitir_ya_avisado');
+  assert.equal(plano(Cobranza.decidirAviso({ config: config(), fecha_corte: '2026-10-09', filas_libro: [fila('2026-10-09', 'incidencia')] })).decision, 'omitir_ya_avisado'); // viernes de la misma semana
+  assert.equal(plano(Cobranza.decidirAviso({ config: config(), fecha_corte: miercoles, filas_libro: [fila(miercoles, 'error')] })).decision, 'avisar');
+  assert.equal(plano(Cobranza.decidirAviso({ config: config({ dia_aviso_sin_archivo: 5 }), fecha_corte: miercoles, filas_libro: [] })).decision, 'esperar');
+  assert.equal(plano(Cobranza.decidirAviso({ config: config({ dia_aviso_sin_archivo: undefined }), fecha_corte: miercoles, filas_libro: [] })).decision, 'avisar'); // por defecto: miércoles
+});
+
+test('decidirAviso: del libro del cliente ignora otras semanas y archivos; una fila de otro cliente es un defecto', () => {
+  const ceros = '0'.repeat(64);
+  const libro = [{ clave: 'demo-01|2026-W40|' + ceros, estado: 'incidencia' }, { clave: 'demo-01|2026-W41|' + HUELLA, estado: 'ok' }]; // aviso de la semana pasada e informe de esta
+  assert.equal(plano(Cobranza.decidirAviso({ config: config(), fecha_corte: '2026-10-07', filas_libro: libro })).decision, 'avisar');
+  assert.equal(codigo(() => Cobranza.decidirAviso({ config: config(), fecha_corte: '2026-10-07', filas_libro: [{ clave: 'demo-02|2026-W41|' + ceros, estado: 'incidencia' }] })), 'E_LIBRO_INVALIDO');
+  for (const e of [null, undefined, 'x', { config: config(), fecha_corte: '2026-10-07' }, { config: 'x', fecha_corte: '2026-10-07', filas_libro: [] }]) {
+    assert.ok(['E_INGESTA_INVALIDA', 'E_LIBRO_INVALIDO'].includes(codigo(() => Cobranza.decidirAviso(e))), JSON.stringify(e));
+  }
+  assert.equal(codigo(() => Cobranza.decidirAviso({ config: config(), fecha_corte: 'hoy', filas_libro: [] })), 'E_LIBRO_INVALIDO');
+});
+
+const procesado = (extra = {}) => ({ cliente_id: 'demo-01', fecha_exportacion: '2026-10-05', hash_archivo: HUELLA, esperado_bytes: 4096, recibido_bytes: 4096, filas_libro: [], ...extra });
+const claveDe = 'demo-01|2026-W41|' + HUELLA;
+
+test('decidirProcesado: una fila «ok» o «incidencia» con la clave omite; «error», «omitida» o ninguna procesa', () => {
+  const d = (filas) => plano(Cobranza.decidirProcesado(procesado({ filas_libro: filas })));
+  assert.deepEqual(d([]), { decision: 'procesar', clave: claveDe });
+  assert.deepEqual(d([{ clave: claveDe, estado: 'ok' }]), { decision: 'omitir_ya_procesado', clave: claveDe });
+  assert.equal(d([{ clave: claveDe, estado: 'incidencia' }]).decision, 'omitir_ya_procesado');
+  assert.equal(d([{ clave: claveDe, estado: 'error' }]).decision, 'procesar');
+  assert.equal(d([{ clave: claveDe, estado: 'omitida' }, { clave: claveDe, estado: 'error' }]).decision, 'procesar');
+  assert.equal(d([{ clave: claveDe, estado: 'error' }, { clave: claveDe, estado: 'ok' }]).decision, 'omitir_ya_procesado');
+});
+
+test('decidirProcesado: busca en todo el libro del cliente; solo cuenta la misma semana de exportación y el mismo archivo', () => {
+  const d = (extra) => plano(Cobranza.decidirProcesado(procesado(extra))).decision;
+  const libro = [{ clave: 'demo-01|2026-W40|' + HUELLA, estado: 'ok' }, { clave: 'demo-01|2026-W41|' + OTRA_HUELLA_PIPE, estado: 'ok' }];
+  assert.equal(d({ filas_libro: libro }), 'procesar'); // el mismo archivo de la semana pasada y otro archivo de esta semana no lo resuelven
+  assert.equal(d({ filas_libro: libro, fecha_exportacion: '2026-10-04' }), 'omitir_ya_procesado'); // el domingo 4 pertenece a la semana 40
+  assert.equal(d({ filas_libro: libro, hash_archivo: OTRA_HUELLA_PIPE }), 'omitir_ya_procesado');
+});
+
+test('decidirProcesado: verifica la descarga ANTES de decidir; una descarga cortada no se informa', () => {
+  for (const [esperado, recibido] of [[4096, 100], [4096, 0], [100, 4096], ['4096', 4095]]) {
+    assert.equal(codigo(() => Cobranza.decidirProcesado(procesado({ esperado_bytes: esperado, recibido_bytes: recibido }))), 'E_DESCARGA_INCOMPLETA', esperado + ' vs ' + recibido);
+  }
+  // aunque el libro diga que ya estaba resuelto, una descarga cortada es un error, no un «ya hecho»
+  assert.equal(codigo(() => Cobranza.decidirProcesado(procesado({ recibido_bytes: 1, filas_libro: [{ clave: claveDe, estado: 'ok' }] }))), 'E_DESCARGA_INCOMPLETA');
+  assert.equal(plano(Cobranza.decidirProcesado(procesado({ esperado_bytes: '4096', recibido_bytes: 4096 }))).decision, 'procesar');
+});
+
+test('decidirProcesado: datos rotos fallan con código y no deciden por su cuenta', () => {
+  assert.equal(codigo(() => Cobranza.decidirProcesado(procesado({ filas_libro: [{ clave: 'demo-02|2026-W41|' + HUELLA, estado: 'ok' }] }))), 'E_LIBRO_INVALIDO'); // fila de otro cliente
+  assert.equal(codigo(() => Cobranza.decidirProcesado(procesado({ filas_libro: [{ clave: claveDe, estado: 'hecho' }] }))), 'E_LIBRO_INVALIDO');
+  assert.equal(codigo(() => Cobranza.decidirProcesado(procesado({ filas_libro: 'x' }))), 'E_LIBRO_INVALIDO');
+  assert.equal(codigo(() => Cobranza.decidirProcesado(procesado({ filas_libro: undefined }))), 'E_LIBRO_INVALIDO');
+  assert.equal(codigo(() => Cobranza.decidirProcesado(procesado({ hash_archivo: 'corta' }))), 'E_LIBRO_INVALIDO');
+  assert.equal(codigo(() => Cobranza.decidirProcesado(procesado({ hash_archivo: M7.HUELLA_SIN_ARCHIVO }))), 'E_LIBRO_INVALIDO');
+  assert.equal(codigo(() => Cobranza.decidirProcesado(procesado({ fecha_exportacion: 'ayer' }))), 'E_LIBRO_INVALIDO');
+  assert.equal(codigo(() => Cobranza.decidirProcesado(procesado({ cliente_id: '' }))), 'E_LIBRO_INVALIDO');
+  assert.equal(codigo(() => Cobranza.decidirProcesado(procesado({ esperado_bytes: undefined }))), 'E_INGESTA_INVALIDA');
+  for (const e of [null, undefined, 'x', 5]) assert.equal(codigo(() => Cobranza.decidirProcesado(e)), 'E_DECISION_INVALIDA', JSON.stringify(e));
+});
+
+/* --------------------------------------------------------------- manejarError */
+
+const fallo = (extra = {}) => ({
+  codigo: 'E_DRIVE_LISTAR', contexto: { cliente_id: 'demo-01', workflow: '[COB-DEV] Shell demo-01', nodo: 'Listar carpeta', ejecucion_id: 4711 }, operador: 'javier@ejemplo.example',
+  cliente_id: 'demo-01', fecha_corte: CORTE, iniciada_utc: AHORA, terminada_utc: FIN, guardias: ENSAYO, modo_cliente: 'dry_run', ...extra
+});
+
+test('manejarError: el aviso a Javier y la fila «error» del libro, en un solo paso y solo con códigos', () => {
+  const r = plano(Cobranza.manejarError(fallo({ hash_archivo: HUELLA })));
+  assert.equal(r.alerta.sano.codigo, 'E_DRIVE_LISTAR');
+  assert.deepEqual(r.alerta.envio.destinatarios, ['javier@ejemplo.example']);
+  assert.equal(r.alerta.envio.accion, 'enviar');
+  assert.equal(r.fila.estado, 'error');
+  assert.equal(r.fila.codigo_error, 'E_DRIVE_LISTAR');
+  assert.equal(r.fila.hash_archivo, HUELLA);
+  assert.equal(r.fila.modo, 'dry');
+  assert.equal(r.fila.clave, 'demo-01|2026-W41|' + HUELLA);
+  assert.equal(r.fila_codigo, null);
+  assert.equal(plano(Cobranza.manejarError(fallo())).fila.hash_archivo, M7.HUELLA_SIN_ARCHIVO); // sin archivo aún: huella de «ninguno»
+});
+
+test('manejarError: «real» solo con la llave doble; sin guardias (aún no se conocen) es «dry»', () => {
+  assert.equal(plano(Cobranza.manejarError(fallo({ guardias: REAL, modo_cliente: 'real' }))).fila.modo, 'real');
+  assert.equal(plano(Cobranza.manejarError(fallo({ guardias: REAL, modo_cliente: 'dry_run' }))).fila.modo, 'dry');
+  assert.equal(plano(Cobranza.manejarError(fallo({ guardias: null, modo_cliente: 'real' }))).fila.modo, 'dry');
+  assert.equal(plano(Cobranza.manejarError(fallo({ guardias: undefined, modo_cliente: 'real' }))).fila.modo, 'dry');
+});
+
+test('manejarError: sin fecha de corte no hay semana que registrar: solo el aviso', () => {
+  for (const fecha of [undefined, null]) {
+    const r = plano(Cobranza.manejarError(fallo({ fecha_corte: fecha })));
+    assert.equal(r.fila, null);
+    assert.equal(r.fila_codigo, null);
+    assert.equal(r.alerta.sano.codigo, 'E_DRIVE_LISTAR');
+  }
+});
+
+test('manejarError: si la fila no se puede armar no se pierde el aviso: se devuelve el código de por qué', () => {
+  const r = plano(Cobranza.manejarError(fallo({ cliente_id: 'con espacio' })));
+  assert.equal(r.fila, null);
+  assert.equal(r.fila_codigo, 'E_LIBRO_INVALIDO');
+  assert.equal(r.alerta.sano.codigo, 'E_DRIVE_LISTAR');
+  assert.equal(plano(Cobranza.manejarError(fallo({ fecha_corte: 'ayer' }))).fila_codigo, 'E_FECHA_INVALIDA');
+});
+
+test('manejarError: un código que no lo es se vuelve «desconocido»; la lista de problemas solo admite códigos; el aviso de configuración', () => {
+  const r = plano(Cobranza.manejarError(fallo({ codigo: 'Fallo al leer a Juan Pérez, factura A-1001' })));
+  assert.equal(r.alerta.sano.codigo, 'E_DESCONOCIDO');
+  assert.equal(JSON.stringify(r).includes('Juan'), false);
+  const c = plano(Cobranza.manejarError({ codigo: 'E_CFG_INVALIDA', contexto: { cliente_id: 'demo-01' }, operador: 'javier@ejemplo.example', problemas: ['E_CFG_ENTREGA', 'E_CFG_ZONA'] }));
+  assert.equal(c.fila, null);
+  assert.ok(c.alerta.texto.cuerpo_texto.includes('Problemas: E_CFG_ENTREGA, E_CFG_ZONA'));
+  assert.equal(codigo(() => Cobranza.manejarError(fallo({ problemas: ['texto libre con datos'] }))), 'E_ALERTA_INVALIDA');
+  for (const e of [null, undefined, 'x', 5]) assert.equal(codigo(() => Cobranza.manejarError(e)), 'E_ALERTA_INVALIDA', JSON.stringify(e));
+});
+
+test('manejarError: con un operador inválido no hay a quién avisar, y lo dice; la fila igual se arma', () => {
+  const r = plano(Cobranza.manejarError(fallo({ operador: 'no es un correo' })));
+  assert.equal(r.alerta.envio.accion, 'no_enviar');
+  assert.equal(r.fila.estado, 'error');
+});
+
+test('filaError: el modo sale de la misma definición de «envío real» que usa M5 (guardias + modo del cliente)', () => {
+  const base = { cliente_id: 'demo-01', codigo: 'E_DRIVE_LISTAR', fecha_corte: CORTE, iniciada_utc: AHORA, terminada_utc: FIN };
+  const modo = (guardias, modo_cliente) => plano(Cobranza.filaError({ ...base, guardias, modo_cliente })).modo;
+  assert.equal(modo(REAL, 'real'), 'real');
+  assert.equal(modo(REAL, 'dry_run'), 'dry');
+  assert.equal(modo(ENSAYO, 'real'), 'dry');
+  assert.equal(modo({ permitido: false, dry_run: false }, 'real'), 'dry');
+  assert.equal(modo(null, 'real'), 'dry');
+  assert.equal(modo(undefined, undefined), 'dry');
+  assert.equal(modo({ permitido: 'true', dry_run: 'false' }, 'real'), 'dry'); // solo un booleano inequívoco cuenta
+});
+
+test('filaError: «modo» y «guardias» a la vez son ambiguos y no se aceptan', () => {
+  const base = { cliente_id: 'demo-01', codigo: 'E_DRIVE_LISTAR', fecha_corte: CORTE, iniciada_utc: AHORA, terminada_utc: FIN };
+  assert.equal(codigo(() => Cobranza.filaError({ ...base, modo: 'real', guardias: REAL, modo_cliente: 'real' })), 'E_LIBRO_INVALIDO');
+  assert.equal(plano(Cobranza.filaError({ ...base, modo: 'real' })).modo, 'real'); // la forma antigua sigue valiendo
 });
 
 /* ------------------------------------------------------------------ pureza */

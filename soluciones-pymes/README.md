@@ -6,7 +6,7 @@ necesario, con pruebas.
 
 | Carpeta | Sector | Problema | Estado |
 |---|---|---|---|
-| [`cobranza-asistida/`](cobranza-asistida/) | Pymes uruguayas que facturan a crédito a otras empresas | Facturas vencidas que nadie reclama a tiempo | **Etapa 1 hecha** ([`nucleo/`](cobranza-asistida/nucleo/)): plan de entrevistas, criterios de la lista objetivo, arquitectura en n8n y el núcleo de código con sus pruebas. En n8n nada construido ni activado; la Etapa 2 espera OK. |
+| [`cobranza-asistida/`](cobranza-asistida/) | Pymes uruguayas que facturan a crédito a otras empresas | Facturas vencidas que nadie reclama a tiempo | **Etapas 1 y 2 hechas** ([`nucleo/`](cobranza-asistida/nucleo/)): plan de entrevistas, criterios de la lista objetivo, arquitectura en n8n, el núcleo de código con sus pruebas y, en tu n8n, un banco de pruebas `[COB-DEV]` con datos ficticios (nada activo ni publicado, sin credenciales). Falta la serie de roturas a propósito. |
 | [`biblioteca-tecnica/recordacitas/`](biblioteca-tecnica/recordacitas/) | Negocios con cita previa o reserva | Citas a las que el cliente no se presenta | **Archivada** como biblioteca técnica, no como producto. Sigue verificada. |
 
 Ver [`biblioteca-tecnica/`](biblioteca-tecnica/) para qué piezas se reutilizan.

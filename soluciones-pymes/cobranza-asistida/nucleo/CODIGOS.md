@@ -135,6 +135,8 @@ opera el sistema (recibe el código en la alerta). «Fila» = se cuenta en «fil
 | `E_ALERTA_INVALIDA` | Alerta sin código válido. |
 | `E_ARRANQUE_INVALIDO` / `E_PREPARAR_INVALIDO` / `E_ENVIO_INVALIDO` | Entrada mal armada para esa etapa. |
 | `E_INCONSISTENCIA_ENSAYO` | Las llaves de ensayo cambiaron entre preparar y enviar, o dos definiciones de «envío real» no coinciden. |
+| `E_OPERACION_DESCONOCIDA` | El flujo pidió al núcleo una operación que no existe (nombre mal escrito). |
+| `E_ENTRADA_INVALIDA` | El flujo mandó al núcleo una entrada que no es un objeto. |
 | `E_ENVIO_ENTRADA_INVALIDA` | La guardia de envío recibió algo que no es un pedido. |
 | `E_ENVIO_INTERRUPTOR_APAGADO` | La guardia de envío no vio el interruptor general abierto. |
 | `E_ENVIO_LISTA_BLANCA_TAMANO` | La lista blanca no tiene entre 1 y el máximo de direcciones. |
@@ -164,3 +166,8 @@ puede traer datos del cliente y nunca se reenvía.
 | `E_CORREO_ENVIAR` | Falló el envío del correo. |
 | `E_ARCHIVO_AMBIGUO` | Dos archivos aptos con el mismo instante más reciente: no se elige a ciegas. |
 | `E_BLOQUEO_VENCIDO` | Una ejecución anterior murió sin liberar el bloqueo: se avisa, no se reintenta sola. |
+| `E_TABLA_LEER` | Falló la lectura de una tabla de datos (control, bloqueos o libro). Sin lectura no se decide nada: el día termina en error. |
+| `E_TABLA_ESCRIBIR` | Falló la escritura en una tabla de datos (libro o bloqueos). Si ocurre después de haber enviado el informe, el libro queda sin la fila «ok» (ver el riesgo residual en `docs/03-arquitectura-n8n.md`). |
+| `E_HUELLA` | Falló el cálculo de la huella SHA-256 del archivo. |
+| `E_NUCLEO_FALLO` | La llamada al subflujo del núcleo falló o no devolvió una respuesta válida. |
+| `E_FLUJO_FALLO` | Falló un paso propio del flujo (ni el núcleo ni un servicio externo): **es un defecto a investigar.** |

@@ -58,4 +58,15 @@ function capturar(fn) {
   }
 }
 
-module.exports = { cargar, fuente, plano, capturar, SRC, crearContexto };
+// El paquete que va a n8n (n8n/dist/nucleo-bundle.js) menos su última parte (la que lee $input): define todos los módulos y el
+// envoltorio en el mismo entorno restringido. Sirve para correr las pruebas contra EXACTAMENTE el código que ejecutará n8n.
+function cargarPaquete() {
+  const paquete = fs.readFileSync(path.join(__dirname, '..', 'n8n', 'dist', 'nucleo-bundle.js'), 'utf8');
+  const corte = paquete.indexOf('// ===== entrada-n8n =====');
+  if (corte < 0) throw new Error('el paquete no tiene su parte de entrada');
+  const ctx = crearContexto();
+  vm.runInContext(paquete.slice(0, corte), ctx, { filename: 'nucleo-bundle.js' });
+  return ctx;
+}
+
+module.exports = { cargar, fuente, plano, capturar, SRC, crearContexto, cargarPaquete };

@@ -236,7 +236,7 @@ var M4 = (function () {
     var lineas = lineasLectura(l);
     if (!lineas.length) return '';
     var h = ['<div class="alerta" role="alert"><strong>Antes de usar este informe</strong><ul>'];
-    lineas.forEach(function (x) { h.push('<li>' + esc(x.replace(/^\s*·\s*/, '')) + '</li>'); });
+    lineas.forEach(function (x) { h.push('<li>' + esc(x.replace(/^\s*\u00b7\s*/, '')) + '</li>'); });
     h.push('</ul></div>');
     return h.join('');
   }

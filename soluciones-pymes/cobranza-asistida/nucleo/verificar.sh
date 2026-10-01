@@ -4,12 +4,14 @@
 #
 #    · sintaxis de todos los archivos JavaScript
 #    · ejemplos y demostración al día con el código
+#    · el paquete para n8n (n8n/dist) al día con las fuentes, y la batería completa pasando contra ESE código
+#    · los flujos de n8n de la Etapa 2 (shell y utilidades) al día con sus generadores
 #    · todas las pruebas, repetidas con seis zonas horarias distintas: las fechas
 #      son lo primero que se rompe fuera de la zona del autor
 #    · (opcional) pasada profunda con muchas más semillas al azar
 #    · (si hay Playwright) el informe de demostración en un Chromium real
-#    · (opcional) pruebas de mutación: se rompen reglas a propósito y las pruebas
-#      tienen que darse cuenta
+#    · (opcional) pruebas de mutación del núcleo y de los generadores de los flujos de n8n: se rompen
+#      reglas a propósito y las pruebas tienen que darse cuenta
 #
 #  Uso:  ./verificar.sh                  verificación normal (segundos)
 #        ./verificar.sh --profundo       además, 10 veces más casos al azar
@@ -35,10 +37,10 @@ for arg in "$@"; do
 done
 
 echo "▸ Sintaxis"
-for f in src/*.js tests/*.js datos-ficticios/*.js demo/*.js mutaciones.js; do
+for f in src/*.js tests/*.js datos-ficticios/*.js demo/*.js n8n/*.js mutaciones.js; do
   node --check "$f" || { echo "✗ error de sintaxis en $f"; exit 1; }
 done
-echo "  ✓ $(ls src/*.js tests/*.js datos-ficticios/*.js demo/*.js mutaciones.js | wc -l | tr -d ' ') archivos"
+echo "  ✓ $(ls src/*.js tests/*.js datos-ficticios/*.js demo/*.js n8n/*.js mutaciones.js | wc -l | tr -d ' ') archivos"
 
 echo
 echo "▸ Demostración y ejemplos al día con el código"
@@ -56,6 +58,17 @@ for tz in America/Montevideo Europe/Madrid UTC Pacific/Kiritimati America/Los_An
   fi
   echo "✓ $(echo "$salida" | awk '/^# pass/ {print $3}') pruebas"
 done
+
+echo
+echo "▸ Paquete para n8n (lo que de verdad se ejecuta)"
+node n8n/probar-paquete.js || exit 1
+
+echo
+echo "▸ Flujos de n8n de la Etapa 2 (lo que se sube al servidor) al día con sus generadores"
+for g in generar-shell generar-utilidades; do
+  node "n8n/$g.js" --verificar > /dev/null || { node "n8n/$g.js" --verificar; exit 1; }
+done
+echo "  ✓ shell y utilidades sin diferencias (que el servidor tenga lo mismo se comprueba con n8n/comparar-despliegue.js)"
 
 if [ "$PROFUNDO" = "1" ]; then
   echo
@@ -77,6 +90,9 @@ if [ "$MUTACIONES" = "1" ]; then
   echo
   echo "▸ Pruebas de mutación"
   node mutaciones.js || exit 1
+  echo
+  echo "▸ Pruebas de mutación de los generadores de los flujos de n8n"
+  node n8n/mutaciones-flujos.js || exit 1
 fi
 
 echo

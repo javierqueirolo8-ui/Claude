@@ -1,10 +1,10 @@
 # Arquitectura modular base en n8n · Cobranza asistida
 
-**Estado:** diseño para el Punto de control 2 · 29-sep-2026 · **actualizado el 30-sep-2026**: la **Etapa 1 está terminada**
+**Estado:** diseño para el Punto de control 2 · 29-sep-2026 · **actualizado el 1-oct-2026**: la **Etapa 1 está terminada**
 (el núcleo puro, con sus pruebas, está en [`../nucleo/`](../nucleo/)), n8n está confirmado como tu servidor de Oracle y autorizado
-como banco de pruebas (solo datos ficticios), y Oracle está en **São Paulo**. **En n8n no se ha construido, activado ni ejecutado
-nada**: no se creó ningún workflow, credencial ni tabla en tu n8n y no se envió ningún correo. La Etapa 2 (armar el flujo en tu n8n)
-**espera tu OK**.
+como banco de pruebas (solo datos ficticios), Oracle está en **São Paulo** y la **Etapa 2 está construida** en tu n8n: tres flujos
+`[COB-DEV]` y siete tablas `cob_dev_*`, con datos 100 % ficticios, **nada activo ni publicado**, sin credenciales y sin haber enviado ningún
+correo (el detalle y lo que falta, en la sección 11). **No se ha tocado producción ni se ha contactado a nadie.**
 **Documentos hermanos:** [plan de entrevistas](01-plan-validacion.md) · [criterios de la lista](02-criterios-lista-objetivo.md)
 
 > No es asesoramiento jurídico. Los textos legales son los oficiales (IMPO, gub.uy) leídos el
@@ -265,7 +265,8 @@ Reglas:
 4. **Marcar como hecho después de enviar.** Se sigue la pauta de n8n para disparadores por sondeo:
    se consulta el libro antes y se inserta la fila `ok` después del envío. Se acepta como costo un
    duplicado raro (el envío salió y el marcado falló) antes que perder un informe; como el único
-   destinatario es el dueño, un duplicado es inocuo.
+   destinatario es el dueño, un duplicado es inocuo. Ejercitado en el simulador y
+   preparado para n8n (escenario `esc-f2`).
 5. **Recuperación diaria.** El disparador es diario, no semanal: si el servidor estuvo caído el
    lunes, el martes lo recoge. Si el miércoles (`dia_aviso_sin_archivo`, configurable) no ha llegado
    archivo, se envía al dueño un aviso fijo «no encontramos la exportación de esta semana» (también
@@ -503,6 +504,44 @@ de demostración comprobado en Chromium. Los niveles 1 y 2 usan datos **sintéti
 reales que anonimizar). Falta lo que solo puede probarse en n8n —nivel 6 sobre el workflow y nivel 7— y la guía
 manual (nivel 9). Todo se repite con [`nucleo/verificar.sh`](../nucleo/verificar.sh).
 
+**Estado de la Etapa 2 (1-oct-2026).** En tu instancia hay tres flujos y siete tablas `cob_dev_*`: todo `[COB-DEV]`, con datos 100 % ficticios,
+**nada activo ni publicado** y sin credenciales (Drive y correo están simulados con tablas).
+
+| Flujo | Qué es |
+|---|---|
+| «Núcleo (puro)» | Un nodo de código con el paquete generado desde `nucleo/src`, idéntico byte a byte (una prueba lo exige). Siete operaciones: `iniciar`, `elegir_archivo`, `decidir_aviso`, `decidir_procesado`, `preparar`, `armar_envio`, `error`. |
+| «Shell demo-01» | El flujo diario: 65 nodos y disparador manual. Todo fallo de entrada o salida pasa por un nodo que fija un código propio y el día termina en «Fin · error». |
+| «Utilidades de prueba» | Herramienta del banco de pruebas (n8n no deja borrar ni cambiar filas por API): fija la tabla de control, limpia un cliente `esc-…` y compara tablas. **Solo acepta clientes que empiecen por `esc-`** y nunca borra sin filtro. |
+
+**Cómo se verificó.** Los mismos escenarios se corren en el simulador (`tests/simulador.js`, el gemelo digital) y en el flujo real. Lo que cada uno
+deja en las cuatro tablas (correos, libro, carpeta de salida y bloqueos) se lleva a una forma canónica (`n8n/canonico.js`) y se compara por huella
+SHA-256 dentro de n8n. **54 pasos** (35 escenarios: el flujo diario completo, la llave doble y las anomalías de la tabla de control) dieron **lo
+mismo en los dos lados**, con sus caminos de error y de guarda y el texto de cada correo y del informe. Aparte, `n8n/comparar-despliegue.js` demuestra
+que lo guardado en el servidor es lo generado aquí (65 nodos, 108 conexiones, inactivo, sin versión activa ni datos fijados). Los generadores de los flujos tienen sus propias pruebas de mutación (`n8n/mutaciones-flujos.js`: 19 averías provocadas, todas detectadas). El banco de pruebas encontró
+**un defecto real** que el simulador no podía ver (ver la regla 2) y que ya está corregido.
+
+**Lo que n8n enseñó** (cada regla la vigila una prueba de `tests/n8n-flujos.test.js`):
+
+1. `.onError(…)` se escribe sobre el nodo **antes** de `.to(…)`; después se engancha al último nodo de la cadena y no al nodo que falló.
+2. Toda referencia a otro nodo lleva índice explícito (`first(0)`, `all(0)`): sin él, en el tramo de errores (al que se llega por muchos caminos) n8n puede leer
+   la salida de error, que está vacía.
+3. Las referencias a tablas y flujos son **nombres fijos, nunca expresiones**. En una prueba, una expresión de nombre de tabla que fallaba al evaluarse no hizo fallar el nodo: leyó *otra* tabla (la de bloqueos).
+   El núcleo rechazó esas filas por su forma (`E_LIBRO_INVALIDO`) y el día terminó en error sin enviar nada: la defensa funcionó, pero la regla se mantiene y el núcleo sigue
+   validando la forma de lo que lee.
+4. Todo nodo con salida de error la tiene conectada; los mensajes de los servicios no se reenvían (solo códigos `E_…`); todo camino de fallo termina en «Fin · error».
+   Si **también** falla el manejo del error (el núcleo no responde), «Fin · error» falla a la vista —n8n marca la ejecución como fallida—, el bloqueo se libera y no hay fila de libro
+   ni aviso posibles: ahí es donde tomará la posta el flujo de alertas de la Etapa 3.
+5. Cada cliente de prueba es `esc-…`; las pruebas se corren sobre clientes distintos para no mezclar lo que dejan.
+
+**Riesgo residual conocido.** Si falla la escritura del libro **después** de haber enviado el informe (`E_TABLA_ESCRIBIR`), queda una fila `error` (no `ok`): la próxima ejecución
+volvería a procesar el mismo archivo y enviaría una **segunda copia al mismo buzón del dueño**. Es el duplicado raro que acepta la regla 4 de la sección 8; se avisa a Javier
+y el escenario `esc-f2` lo ejercita.
+
+**Lo que falta de la Etapa 2.** (a) La serie de **roturas de infraestructura a propósito** en el flujo real —lectura de la tabla de control, lectura y escritura del libro, llamada al
+núcleo, huella, un nodo propio y la caída también del manejo del error—: está preparada (`node n8n/escenarios.js roturas`) y cada rotura vale solo para su cliente de prueba; falta correrla en
+n8n. (b) El flujo de alertas (`Error Trigger`) pasa a la **Etapa 3**: n8n solo lo dispara con ejecuciones activas y no se puede probar sin activar nada. (c) La guía de verificación manual
+(nivel 9). (d) Las credenciales de Gmail y Drive las crea Javier; no hacen falta mientras Drive y correo sean simulados.
+
 ---
 
 ## 12. Variante «los datos no salen de la empresa» (modo local)
@@ -533,7 +572,7 @@ transferencia a un Estado sin nivel adecuado para los datos de los deudores. Tam
 |---|---|---|---|
 | **0 · Diseño** | Este documento, el plan de entrevistas y los criterios de la lista. | **Punto de control 2**: revisado el 30-sep-2026 con ajustes (15 entrevistas; Oracle en São Paulo). | Hecho, con las decisiones abiertas de la sección 16. |
 | **1 · Núcleo puro** | Módulos M0 a M7 y su cableado en JavaScript, generador de datos ficticios, simulador del flujo diario, pruebas de los niveles 1 a 6, informe HTML de ejemplo. Todo local en el repositorio: sin n8n, sin datos reales, sin contactar a nadie. | **Terminada el 30-sep** ([`../nucleo/`](../nucleo/)). Corre **en paralelo** a las entrevistas y da una demostración realista (`nucleo/demo/`). | Hecho: criterios de salida de la sección 11 cumplidos para el núcleo. |
-| **2 · n8n de pruebas** | Shell y sub-workflows en tu instancia de Oracle (São Paulo) como banco de pruebas, datos ficticios, envío solo a tu bandeja; nivel 7. | Instancia autorizada el 30-sep; **pediré tu OK para arrancar la etapa** al terminar la 1. Credenciales creadas por ti. | Nada activo salvo tus ensayos; **Punto de control 3** con guía manual. |
+| **2 · n8n de pruebas** | Shell y sub-workflows en tu instancia de Oracle (São Paulo) como banco de pruebas, datos ficticios, envío solo a tu bandeja; nivel 7. | Instancia autorizada el 30-sep; **pediré tu OK para arrancar la etapa** al terminar la 1. Credenciales creadas por ti. | Nada activo salvo tus ensayos; **Punto de control 3** con guía manual. **Estado (1-oct):** construido y verificado contra el simulador (sección 11); faltan la serie de roturas de infraestructura en n8n y la guía manual. |
 | **3 · Sombra** | Datos reales de un cliente que confirmó interés, con informe enmascarado. | Cliente que confirma interés real · **unipersonal en BPS/DGI** antes de tocar sus sistemas o facturar · contrato de encargo · inscripción de la base · **región y transferencias resueltas (São Paulo no vale sin más)** · evaluación de impacto documentada. | El informe coincide con el cálculo manual del cliente varias semanas seguidas. |
 | **4 · Piloto** | Informe real al dueño, en modo `enlace_salida`. | **Punto de control 4** («antes del envío final»): tu autorización expresa. | Un ciclo completo sin incidentes. |
 
@@ -572,7 +611,7 @@ Gravedad de 1 a 5 (5 = fuga de datos, correo a quien no corresponde o parada en 
 | R6 | Datos de un cliente usados para otro fin | 5 | Baja | Aislamiento por cliente; art. 30; borrado | Diseñado |
 | R7 | Archivo malicioso, corrupto o enorme | 3 | Media | Límites, cuarentena, actualizar | Diseñado |
 | R8 | Cálculo equivocado (zona, moneda, decimal) | 4 | Media | UTC, rechazo de ambiguos, sombra | Diseñado |
-| R9 | Ejecución duplicada o informe que no llega | 3 | Media | Libro, bloqueo, recuperación diaria, latido | Diseñado |
+| R9 | Ejecución duplicada o informe que no llega | 3 | Media | Libro, bloqueo, recuperación diaria, latido. Probado en n8n: repeticiones del mismo día, bloqueo activo y vencido, correo caído y reintento (la caída del servidor y la doble ejecución intercalada solo en el simulador); queda el duplicado raro si falla el libro tras enviar (sección 11) | **Parcial** (banco de pruebas) |
 | R10 | Oracle reclama la instancia o no hay SLA | 4 | Media | PAYG o servidor de pago, copias fuera, latido | **Abierto** |
 | R11 | Caducidad de credenciales de Google | 3 | Alta con «Testing» | Cuenta de servicio para Drive; dominio y buzón propios | **Abierto** |
 | R12 | Reputación del remitente (Gmail sin dominio) | 3 | Media | Dominio con SPF, DKIM y DMARC antes de datos reales | **Abierto** |
@@ -581,6 +620,7 @@ Gravedad de 1 a 5 (5 = fuga de datos, correo a quien no corresponde o parada en 
 | R15 | Incumplir la licencia de n8n | 3 | Baja | El cliente nunca accede a n8n | Diseñado |
 | R16 | Punto único de fallo (una sola persona) | 3 | Media | Runbook documentado, credenciales guardadas, latido | Parcial |
 | R17 | Registro de bases de datos pendiente | 3 | Media | Consulta a la URCDP antes de guardar datos | **Abierto** |
+| R18 | Una referencia rota (tabla o flujo renombrado o borrado) hace que n8n lea otra tabla en silencio | 4 | Baja | Referencias con nombre fijo, validación de la forma de lo leído en el núcleo (falla cerrada), serie de roturas en el banco de pruebas | **Parcial** (observado una vez; falta la serie) |
 
 ---
 
@@ -591,7 +631,7 @@ Necesito tu decisión en estos puntos; **hasta entonces no toco nada**.
 | # | Decisión | Opciones | Mi recomendación | Estado (30-sep) |
 |---|---|---|---|---|
 | D1 | ¿La instancia de n8n conectada es tu servidor de Oracle? ¿Puedo usarla como **banco de pruebas** con datos ficticios, prefijo `[COB-DEV]` y nada activo? | Sí / No / Otra instancia | Usarla solo como pruebas; PROD separada. | **Respondida: sí, es tu servidor de Oracle (30-sep).** Autorizada como banco de pruebas; **Etapa 2 autorizada el 30-sep** (solo `[COB-DEV]`, datos 100 % ficticios, nada de datos reales). |
-| D2 | Alcance inmediato | (a) Solo diseño; (b) empezar la Etapa 1 (núcleo puro, local, sin contactar a nadie) en paralelo a las entrevistas | (b) | **Respondida: (b). Etapa 1 hecha (30-sep).** La Etapa 2 espera tu OK. |
+| D2 | Alcance inmediato | (a) Solo diseño; (b) empezar la Etapa 1 (núcleo puro, local, sin contactar a nadie) en paralelo a las entrevistas | (b) | **Respondida: (b). Etapa 1 hecha (30-sep).** Etapa 2 autorizada el 30-sep y construida el 1-oct (sección 11). |
 | D3 | Canal de entrada | A · Drive con cuenta de servicio · B · buzón · C · manual | A; C para el primer piloto. | **Respondida: C (carga manual / recepción asistida) en el primer piloto**; migrar a A una vez validado. |
 | D4 | Modo de entrega con datos reales | `correo_completo` · `enlace_salida` | `enlace_salida` (un destinatario equivocado solo vería totales). | **Respondida: `enlace_salida`.** |
 | D5 | Remitente | Gmail personal (solo ficticios) · dominio propio con buzón profesional | Dominio propio antes de datos reales. | **Respondida:** Gmail personal solo para pruebas en DEV; dominio propio con buzón profesional (SPF y DKIM) antes de cualquier envío en frío o comunicación real. |

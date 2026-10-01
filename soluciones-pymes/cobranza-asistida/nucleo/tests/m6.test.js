@@ -391,3 +391,170 @@ test('no modifica sus argumentos', () => {
   M6.sanearError(new Error('x'), c);
   assert.equal(JSON.stringify(d), antes);
 });
+
+/* --------------------------------------------------------- bloqueoVigente */
+
+const BLOQUEO = (extra = {}) => ({ cliente_id: 'demo-01', expira_utc: '2026-10-05T11:30:00Z', ...extra });
+
+test('bloqueoVigente: sin filas no hay bloqueo; con una, esa; con varias, la de caducidad más lejana', () => {
+  assert.equal(M6.bloqueoVigente([], 'demo-01'), null);
+  assert.deepEqual(plano(M6.bloqueoVigente([BLOQUEO()], 'demo-01')), BLOQUEO());
+  const r = plano(M6.bloqueoVigente([
+    BLOQUEO({ expira_utc: '2026-10-05T11:10:00Z' }), BLOQUEO({ expira_utc: '2026-10-05T12:00:00Z' }), BLOQUEO({ expira_utc: '2026-10-05T11:59:59Z' })
+  ], 'demo-01'));
+  assert.equal(r.expira_utc, '2026-10-05T12:00:00Z');
+});
+
+test('bloqueoVigente: compara bien las milésimas y el orden de las filas no importa', () => {
+  const a = BLOQUEO({ expira_utc: '2026-10-05T11:00:00Z' });
+  const b = BLOQUEO({ expira_utc: '2026-10-05T11:00:00.500Z' });
+  assert.equal(M6.bloqueoVigente([a, b], 'demo-01').expira_utc, '2026-10-05T11:00:00.500Z');
+  assert.equal(M6.bloqueoVigente([b, a], 'demo-01').expira_utc, '2026-10-05T11:00:00.500Z');
+});
+
+test('bloqueoVigente: de la fila de la tabla solo devuelve las dos columnas que importan', () => {
+  const fila = BLOQUEO({ id: 7, createdAt: '2026-10-05T11:00:00.000Z', updatedAt: '2026-10-05T11:00:00.000Z', extra: 'Juan Pérez' });
+  const r = plano(M6.bloqueoVigente([fila], 'demo-01'));
+  assert.deepEqual(Object.keys(r).sort(), ['cliente_id', 'expira_utc']);
+});
+
+test('bloqueoVigente: una fila ajena, sin caducidad válida o que no es una fila es un defecto y falla con código', () => {
+  for (const f of [BLOQUEO({ cliente_id: 'demo-02' }), BLOQUEO({ cliente_id: undefined }), BLOQUEO({ expira_utc: 'mañana' }), BLOQUEO({ expira_utc: null }), BLOQUEO({ expira_utc: '2026-10-05 11:30:00' }),
+    null, undefined, 'x', 5, [], [BLOQUEO()]]) {
+    assert.equal(codigo(() => M6.bloqueoVigente([f], 'demo-01')), 'E_BLOQUEO_INVALIDO', JSON.stringify(f));
+  }
+  // una sola fila mala entre buenas también detiene: no se adivina cuál vale
+  assert.equal(codigo(() => M6.bloqueoVigente([BLOQUEO(), BLOQUEO({ expira_utc: 'x' })], 'demo-01')), 'E_BLOQUEO_INVALIDO');
+});
+
+test('bloqueoVigente: argumentos inválidos fallan con código (incluido un exceso de filas)', () => {
+  for (const [filas, cliente] of [[undefined, 'demo-01'], [null, 'demo-01'], ['x', 'demo-01'], [{}, 'demo-01'], [[], ''], [[], null], [[], 'con espacio'], [[], undefined],
+    [new Array(51).fill(BLOQUEO()), 'demo-01']]) {
+    assert.equal(codigo(() => M6.bloqueoVigente(filas, cliente)), 'E_BLOQUEO_INVALIDO', JSON.stringify([filas && filas.length, cliente]));
+  }
+  assert.notEqual(M6.bloqueoVigente(new Array(50).fill(BLOQUEO()), 'demo-01'), null);
+});
+
+/* -------------------------------------------------------------- yaResuelto */
+
+const CLAVE = 'demo-01|2026-W41|' + HUELLA;
+const FILA_LIBRO = (estado, extra = {}) => ({ clave: CLAVE, estado, ...extra });
+
+test('yaResuelto: solo «ok» e «incidencia» con esa clave cuentan; «error» y «omitida» se reintentan', () => {
+  assert.equal(M6.yaResuelto([], CLAVE), false);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('ok')], CLAVE), true);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('incidencia')], CLAVE), true);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('error')], CLAVE), false);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('omitida')], CLAVE), false);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('error'), FILA_LIBRO('omitida'), FILA_LIBRO('ok')], CLAVE), true);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('ok'), FILA_LIBRO('error')], CLAVE), true);
+});
+
+test('yaResuelto: el libro del cliente trae todas sus ejecuciones; las de otra semana u otro archivo no cuentan', () => {
+  const otraSemana = { clave: 'demo-01|2026-W40|' + HUELLA, estado: 'ok' };
+  const otroArchivo = { clave: 'demo-01|2026-W41|' + OTRA_HUELLA, estado: 'ok' };
+  const aviso = { clave: 'demo-01|2026-W41|' + '0'.repeat(64), estado: 'incidencia' };
+  assert.equal(M6.yaResuelto([otraSemana, otroArchivo, aviso], CLAVE), false);
+  assert.equal(M6.yaResuelto([otraSemana, otroArchivo, aviso, FILA_LIBRO('ok')], CLAVE), true);
+  assert.equal(M6.yaResuelto([otraSemana, otroArchivo, aviso, FILA_LIBRO('error')], CLAVE), false);
+  // y al revés: para la clave del aviso «no llegó», un informe de la misma semana no la resuelve
+  assert.equal(M6.yaResuelto([FILA_LIBRO('ok'), aviso], 'demo-01|2026-W41|' + '0'.repeat(64)), true);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('ok')], 'demo-01|2026-W41|' + '0'.repeat(64)), false);
+});
+
+test('yaResuelto: ignora las columnas de más de la tabla (id, fechas…) y solo devuelve un booleano', () => {
+  const fila = FILA_LIBRO('ok', { id: 3, createdAt: '2026-10-05T11:00:00.000Z', n_filas: 10, modo: 'dry', codigo_error: null });
+  assert.strictEqual(M6.yaResuelto([fila], CLAVE), true);
+});
+
+test('yaResuelto: una fila de OTRO cliente, sin clave o estado válidos, o que no es una fila, es un defecto y falla con código', () => {
+  const otroCliente = 'demo-02|2026-W41|' + HUELLA;
+  const prefijoParecido = 'demo-01X|2026-W41|' + HUELLA;
+  for (const f of [{ clave: otroCliente, estado: 'ok' }, { clave: prefijoParecido, estado: 'ok' }, { clave: 'demo-0|2026-W41|' + HUELLA, estado: 'ok' }, { clave: 'demo-01', estado: 'ok' },
+    { clave: '|2026-W41|' + HUELLA, estado: 'ok' }, FILA_LIBRO('hecho'), FILA_LIBRO(undefined), FILA_LIBRO('OK'), { estado: 'ok' }, { clave: 5, estado: 'ok' },
+    null, undefined, 'x', 5, [], [FILA_LIBRO('ok')]]) {
+    assert.equal(codigo(() => M6.yaResuelto([f], CLAVE)), 'E_LIBRO_INVALIDO', JSON.stringify(f));
+  }
+  // una sola fila mala entre buenas también detiene: el filtro del flujo está mal y no se adivina
+  assert.equal(codigo(() => M6.yaResuelto([FILA_LIBRO('ok'), { clave: otroCliente, estado: 'ok' }], CLAVE)), 'E_LIBRO_INVALIDO');
+  assert.equal(codigo(() => M6.yaResuelto([{ clave: otroCliente, estado: 'ok' }, FILA_LIBRO('ok')], CLAVE)), 'E_LIBRO_INVALIDO');
+});
+
+test('yaResuelto: la clave y la lista deben ser válidas; demasiadas filas también es un defecto', () => {
+  for (const [filas, clave] of [[undefined, CLAVE], [null, CLAVE], ['x', CLAVE], [{}, CLAVE], [[], undefined], [[], null], [[], 5], [[], ''], [[], 'demo-01|2026-W41|corta'],
+    [[], 'demo-01|2026-W41|' + 'A'.repeat(64)], [[], 'demo 01|2026-W41|' + HUELLA], [[], CLAVE + '\n'], [new Array(1001).fill(FILA_LIBRO('error')), CLAVE]]) {
+    assert.equal(codigo(() => M6.yaResuelto(filas, clave)), 'E_LIBRO_INVALIDO', JSON.stringify([filas && filas.length, clave]));
+  }
+  assert.equal(M6.yaResuelto(new Array(1000).fill(FILA_LIBRO('error')), CLAVE), false);
+});
+
+test('yaResuelto concuerda con las claves y las filas que produce el propio libro', () => {
+  const fila = M6.filaLibro(FILA());
+  const clave = M6.claveEjecucion('demo-01', '2026-10-05', HUELLA);
+  assert.equal(fila.clave, clave);
+  assert.equal(M6.yaResuelto([fila], clave), true);
+  assert.equal(M6.yaResuelto([M6.filaLibro({ ...FILA(), estado: 'error', codigo_error: 'E_DRIVE_LISTAR' })], clave), false);
+});
+
+/* ------------------------------------------------------------- filaBloqueo */
+
+const oraculoBloqueo = (ahora, minutos) => new Date(Date.parse(ahora) + minutos * 60000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+const bloqueo = (ahora, minutos) => plano(M6.filaBloqueo({ cliente_id: 'demo-01', ahora_utc: ahora, ...(minutos === undefined ? {} : { minutos }) }));
+
+test('filaBloqueo: caduca 30 minutos después por defecto', () => {
+  assert.deepEqual(bloqueo('2026-10-05T11:00:00Z'), { cliente_id: 'demo-01', expira_utc: '2026-10-05T11:30:00Z' });
+  assert.equal(M6.MINUTOS_BLOQUEO, 30);
+});
+
+test('filaBloqueo: cruza bien la hora, el día, el mes, el año y el bisiesto', () => {
+  assert.equal(bloqueo('2026-10-05T11:45:10Z').expira_utc, '2026-10-05T12:15:10Z');
+  assert.equal(bloqueo('2026-10-05T23:45:00Z').expira_utc, '2026-10-06T00:15:00Z');
+  assert.equal(bloqueo('2026-10-31T23:59:59Z').expira_utc, '2026-11-01T00:29:59Z');
+  assert.equal(bloqueo('2026-12-31T23:59:59Z').expira_utc, '2027-01-01T00:29:59Z');
+  assert.equal(bloqueo('2028-02-28T23:50:00Z').expira_utc, '2028-02-29T00:20:00Z');
+  assert.equal(bloqueo('2028-02-29T23:50:00Z').expira_utc, '2028-03-01T00:20:00Z');
+  assert.equal(bloqueo('2027-02-28T23:50:00Z').expira_utc, '2027-03-01T00:20:00Z');
+  assert.equal(bloqueo('2026-10-05T23:59:59Z', 240).expira_utc, '2026-10-06T03:59:59Z');
+  assert.equal(bloqueo('2026-10-05T00:00:00Z', 1).expira_utc, '2026-10-05T00:01:00Z');
+});
+
+test('filaBloqueo: descarta las milésimas y conserva los segundos', () => {
+  assert.equal(bloqueo('2026-10-05T11:00:07.999Z').expira_utc, '2026-10-05T11:30:07Z');
+  assert.equal(bloqueo('2026-10-05T11:00:07.5Z').expira_utc, '2026-10-05T11:30:07Z');
+});
+
+test('propiedad: filaBloqueo coincide con el cálculo del reloj del sistema en miles de instantes', () => {
+  const az = azar.crear(808);
+  const inicio = Date.UTC(2026, 0, 1);
+  for (let i = 0; i < 6000; i++) {
+    const ms = inicio + az.entero(0, 400 * 24 * 60) * 60000 + az.entero(0, 59) * 1000;
+    const ahora = new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const minutos = az.prob(0.3) ? 30 : az.entero(1, 240);
+    assert.equal(bloqueo(ahora, minutos).expira_utc, oraculoBloqueo(ahora, minutos), ahora + ' + ' + minutos);
+    if (minutos === 30) assert.equal(bloqueo(ahora).expira_utc, oraculoBloqueo(ahora, 30), ahora + ' (por defecto)');
+  }
+});
+
+test('filaBloqueo: pasar de 2099 queda fuera del rango admitido y falla con código', () => {
+  assert.equal(bloqueo('2099-12-31T23:00:00Z').expira_utc, '2099-12-31T23:30:00Z');
+  assert.equal(codigo(() => M6.filaBloqueo({ cliente_id: 'demo-01', ahora_utc: '2099-12-31T23:59:00Z' })), 'E_BLOQUEO_INVALIDO');
+  assert.equal(bloqueo('2000-01-01T00:00:00Z', 1).expira_utc, '2000-01-01T00:01:00Z');
+});
+
+test('filaBloqueo: entradas inválidas fallan con código', () => {
+  const ok = { cliente_id: 'demo-01', ahora_utc: '2026-10-05T11:00:00Z' };
+  for (const e of [null, undefined, 'x', 5, [], {}, { ...ok, cliente_id: '' }, { ...ok, cliente_id: 'con espacio' }, { ...ok, cliente_id: undefined },
+    { ...ok, ahora_utc: '2026-10-05' }, { ...ok, ahora_utc: '2026-10-05T11:00:00' }, { ...ok, ahora_utc: '2026-10-05T25:00:00Z' }, { ...ok, ahora_utc: '2026-02-30T11:00:00Z' }, { ...ok, ahora_utc: undefined },
+    { ...ok, minutos: 0 }, { ...ok, minutos: 241 }, { ...ok, minutos: -5 }, { ...ok, minutos: 1.5 }, { ...ok, minutos: '30' }, { ...ok, minutos: null }, { ...ok, minutos: NaN }, { ...ok, minutos: Infinity }]) {
+    assert.equal(codigo(() => M6.filaBloqueo(e)), 'E_BLOQUEO_INVALIDO', JSON.stringify(e));
+  }
+});
+
+test('un bloqueo recién tomado está ocupado y, al caducar, vencido; y la fila que produce es la que vigila bloqueoVigente', () => {
+  const ahora = '2026-10-05T11:00:00Z';
+  const fila = plano(M6.filaBloqueo({ cliente_id: 'demo-01', ahora_utc: ahora }));
+  assert.equal(M6.estadoBloqueo(fila, ahora), 'ocupado');
+  assert.equal(M6.estadoBloqueo(fila, '2026-10-05T11:29:59Z'), 'ocupado');
+  assert.equal(M6.estadoBloqueo(fila, '2026-10-05T11:30:00Z'), 'vencido');
+  assert.deepEqual(plano(M6.bloqueoVigente([fila], 'demo-01')), fila);
+});

@@ -59,7 +59,7 @@ var Util = (function () {
     return s.replace(CONTROL_RE, ' ').replace(/\s+/g, ' ').trim();
   }
 
-  function sinAcentos(s) { return texto(s).normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function sinAcentos(s) { return texto(s).normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
 
   // Clave para comparar títulos de columna sin distinguir mayúsculas, tildes ni signos.
   function clave(s) { return sinAcentos(limpiar(s)).toLowerCase().replace(/[^a-z0-9]/g, ''); }

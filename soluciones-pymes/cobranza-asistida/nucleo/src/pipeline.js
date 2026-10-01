@@ -5,11 +5,13 @@
    (leer la carpeta, leer y escribir tablas, enviar el correo) y entre un paso y otro llama a estas
    funciones con los mismos datos. Así el orden de los pasos y las decisiones se prueban aquí, sin n8n.
 
-   Orden de una ejecución:
-     validarConfiguracion → arrancar → (tomar bloqueo) → M7.elegirArchivo → (descargar, huella)
-       → M6.decidirEjecucion → preparar → (subir el informe, si aplica) → armarEnvio → (enviar)
-       → (insertar la fila del libro, soltar el bloqueo)
-   Si algo falla: alertaOperador (a Javier, solo códigos) + filaError.
+   Orden de una ejecución (entre paréntesis, lo que hace el flujo: entrada y salida):
+     (leer control y bloqueos) → iniciar → (tomar el bloqueo con la fila que trae) → (leer el libro del cliente y listar la carpeta)
+       → elegirArchivo → (descargar, huella) → decidirProcesado → preparar → (subir el informe, si aplica) → armarEnvio
+       → (enviar) → (insertar la fila del libro, soltar el bloqueo)
+     Sin archivo: decidirAviso → armarEnvio (tipo «sin_archivo») → (enviar) → (libro, soltar).
+   Si algo falla: manejarError (aviso a Javier, solo códigos, y la fila «error» del libro).
+   El flujo nunca interpreta filas de tablas ni decide solo: les pasa las filas a estas funciones y obedece.
 
    Garantías de este archivo:
    · La configuración se valida ENTERA antes de tocar un dato del cliente.
@@ -75,23 +77,88 @@ var Cobranza = (function () {
 
   /* ------------------------------------------------------------- arranque */
 
-  /* e: { config, fila_control, fecha_corte, ahora_utc, fila_bloqueo }
+  /* e: { config, fila_control, fecha_corte, ahora_utc, fila_bloqueo | filas_bloqueo }
      → { accion: 'continuar' | 'detener' | 'omitir_en_curso' | 'alertar_bloqueo_vencido', motivo, codigo?, problemas, guardias }
      (con configuración inválida: motivo «CONFIG_INVALIDA», código «E_CFG_INVALIDA» y la lista de problemas)
+     El bloqueo llega como UNA fila (fila_bloqueo) o como las filas que devolvió la tabla (filas_bloqueo); nunca las dos.
      El orden importa: primero los interruptores, después la configuración y al final el bloqueo. */
   function arrancar(e) {
-    if (!esObjeto(e)) Util.fallar('E_ARRANQUE_INVALIDO');
+    if (!esObjeto(e) || (e.fila_bloqueo !== undefined && e.filas_bloqueo !== undefined)) Util.fallar('E_ARRANQUE_INVALIDO');
     var guardias = M0.evaluarGuardias(e.fila_control);
     if (!guardias.permitido) return { accion: 'detener', motivo: guardias.motivo, problemas: [], guardias: guardias };
     var cfg = validarConfiguracion(e.config, e.fecha_corte);
     if (!cfg.ok) return { accion: 'detener', motivo: 'CONFIG_INVALIDA', codigo: 'E_CFG_INVALIDA', problemas: cfg.problemas, guardias: guardias };
-    var fila = e.fila_bloqueo === undefined ? null : e.fila_bloqueo;
+    var fila = e.filas_bloqueo !== undefined ? M6.bloqueoVigente(e.filas_bloqueo, e.config.cliente_id) : (e.fila_bloqueo === undefined ? null : e.fila_bloqueo);
     // el bloqueo de OTRO cliente no dice nada de este: si la fila no es la suya, algo está mal aguas arriba
     if (fila !== null && (!esObjeto(fila) || fila.cliente_id !== e.config.cliente_id)) Util.fallar('E_BLOQUEO_INVALIDO');
     var bloqueo = M6.estadoBloqueo(fila, e.ahora_utc);
     var decision = M6.decidirEjecucion({ ya_resuelto: false, bloqueo: bloqueo });
     if (decision === 'procesar') return { accion: 'continuar', motivo: null, problemas: [], guardias: guardias };
-    return { accion: decision, motivo: decision === 'omitir_en_curso' ? 'BLOQUEO_ACTIVO' : 'BLOQUEO_VENCIDO', problemas: [], guardias: guardias };
+    if (decision === 'omitir_en_curso') return { accion: decision, motivo: 'BLOQUEO_ACTIVO', problemas: [], guardias: guardias };
+    return { accion: decision, motivo: 'BLOQUEO_VENCIDO', codigo: 'E_BLOQUEO_VENCIDO', problemas: [], guardias: guardias };
+  }
+
+  /* e: { config, filas_control, filas_bloqueo, ahora_utc } → lo de «arrancar» más { fecha_corte } y, si continúa, { bloqueo_nuevo } (la fila
+     que hay que escribir para tomar el bloqueo); acción «error» si algo falla con la fecha ya conocida
+     Lo primero que hace el flujo cada día: fecha local del cliente, interruptor general y bloqueo. La tabla de control debe
+     tener UNA fila; ninguna o varias es una anomalía y no se procesa (falla cerrada, como un interruptor desconocido). */
+  function iniciar(e) {
+    // sin la lista de filas de bloqueo (aunque sea vacía) no se sabe si hay otra ejecución en curso: no se arranca
+    if (!esObjeto(e) || !esObjeto(e.config) || !Array.isArray(e.filas_bloqueo)) Util.fallar('E_ARRANQUE_INVALIDO');
+    var fechaCorte = fechaCorteDe(e.ahora_utc, e.config.zona_horaria);
+    var control = Array.isArray(e.filas_control) && e.filas_control.length === 1 && esObjeto(e.filas_control[0]) ? e.filas_control[0] : null;
+    var r;
+    // Desde aquí la fecha ya se conoce: un fallo no se lanza, se devuelve como acción «error» para que el flujo pueda registrarlo en su semana.
+    try {
+      r = arrancar({ config: e.config, fila_control: control, fecha_corte: fechaCorte, ahora_utc: e.ahora_utc, filas_bloqueo: e.filas_bloqueo });
+      if (r.accion === 'continuar') r.bloqueo_nuevo = M6.filaBloqueo({ cliente_id: e.config.cliente_id, ahora_utc: e.ahora_utc });
+    } catch (err) {
+      r = { accion: 'error', motivo: 'ERROR', codigo: Util.codigoDe(err), problemas: [], guardias: null };
+    }
+    r.fecha_corte = fechaCorte;
+    return r;
+  }
+
+  /* ------------------------------------------------------ carpeta y libro */
+
+  /* e: { config, archivos, fecha_corte } → lo de M7.elegirArchivo. Del archivo solo sale el resultado de la elección. */
+  function elegirArchivo(e) {
+    if (!esObjeto(e) || !esObjeto(e.config)) Util.fallar('E_INGESTA_INVALIDA');
+    return M7.elegirArchivo({ archivos: e.archivos, fecha_corte: e.fecha_corte, config: configIngesta(e.config) });
+  }
+
+  // Clave del libro del aviso «no llegó»: semana de HOY y la huella de ceros. e: { cliente_id, fecha_corte } → { clave }
+  function claveAviso(e) {
+    if (!esObjeto(e)) Util.fallar('E_LIBRO_INVALIDO');
+    return { clave: M6.claveEjecucion(e.cliente_id, e.fecha_corte, M7.HUELLA_SIN_ARCHIVO) };
+  }
+
+  // Clave del libro de un archivo: semana de su EXPORTACIÓN y su huella. e: { cliente_id, fecha_exportacion, hash_archivo } → { clave }
+  function claveArchivo(e) {
+    if (!esObjeto(e) || e.hash_archivo === M7.HUELLA_SIN_ARCHIVO) Util.fallar('E_LIBRO_INVALIDO'); // la huella de «sin archivo» no es de un archivo
+    return { clave: M6.claveEjecucion(e.cliente_id, e.fecha_exportacion, e.hash_archivo) };
+  }
+
+  /* e: { config, fecha_corte, filas_libro } → { decision: 'esperar' | 'avisar' | 'omitir_ya_avisado', clave }
+     filas_libro: lo que devolvió el libro al filtrar por la clave del aviso. */
+  function decidirAviso(e) {
+    if (!esObjeto(e) || !esObjeto(e.config)) Util.fallar('E_INGESTA_INVALIDA');
+    var clave = claveAviso({ cliente_id: e.config.cliente_id, fecha_corte: e.fecha_corte }).clave;
+    var decision = M7.decidirSinArchivo({ fecha_corte: e.fecha_corte, dia_aviso: e.config.dia_aviso_sin_archivo, aviso_ya_enviado: M6.yaResuelto(e.filas_libro, clave) });
+    return { decision: decision, clave: clave };
+  }
+
+  /* e: { cliente_id, fecha_exportacion, hash_archivo, esperado_bytes, recibido_bytes, filas_libro }
+     → { decision: 'procesar' | 'omitir_ya_procesado', clave }
+     Primero verifica que la descarga llegó entera (si no, lanza E_DESCARGA_INCOMPLETA: un informe con facturas de menos no se
+     entrega), después busca en el libro del cliente la clave del archivo (semana de su exportación + huella). El bloqueo ya lo
+     tiene esta ejecución. */
+  function decidirProcesado(e) {
+    if (!esObjeto(e)) Util.fallar('E_DECISION_INVALIDA');
+    var descarga = M7.verificarDescarga({ esperado_bytes: e.esperado_bytes, recibido_bytes: e.recibido_bytes });
+    if (!descarga.ok) Util.fallar('E_DESCARGA_INCOMPLETA');
+    var clave = claveArchivo({ cliente_id: e.cliente_id, fecha_exportacion: e.fecha_exportacion, hash_archivo: e.hash_archivo }).clave;
+    return { decision: M6.decidirEjecucion({ ya_resuelto: M6.yaResuelto(e.filas_libro, clave), bloqueo: 'libre' }), clave: clave };
   }
 
   /* ------------------------------------------------------------- preparar */
@@ -217,18 +284,43 @@ var Cobranza = (function () {
     return { sano: sano, texto: texto, envio: envio };
   }
 
-  /* e: { cliente_id, codigo, fecha_corte, hash_archivo?, iniciada_utc, terminada_utc, modo? } → fila del libro con estado «error» */
+  /* e: { codigo, contexto, operador, problemas?, cliente_id, fecha_corte?, hash_archivo?, iniciada_utc, terminada_utc, guardias?, modo_cliente? }
+     → { alerta: { sano, texto, envio }, fila, fila_codigo }
+     Todo lo que hay que hacer cuando algo falla, en un solo paso: el aviso a Javier (solo códigos) y la fila «error» del libro.
+     Sin fecha de corte no hay semana que registrar (fila nula). Si la fila no es válida no se pierde el aviso: se devuelve el
+     código de por qué no se pudo armar (fila_codigo). El flujo decide qué escribir: un aviso de configuración no toca el libro. */
+  function manejarError(e) {
+    if (!esObjeto(e)) Util.fallar('E_ALERTA_INVALIDA');
+    var alerta = alertaOperador({ error: { codigo: e.codigo }, contexto: e.contexto, operador: e.operador, problemas: e.problemas });
+    var fila = null, filaCodigo = null;
+    if (e.fecha_corte !== undefined && e.fecha_corte !== null) {
+      try {
+        fila = filaError({
+          cliente_id: e.cliente_id, codigo: alerta.sano.codigo, fecha_corte: e.fecha_corte, hash_archivo: e.hash_archivo,
+          iniciada_utc: e.iniciada_utc, terminada_utc: e.terminada_utc, guardias: e.guardias === undefined ? null : e.guardias, modo_cliente: e.modo_cliente
+        });
+      } catch (err) { filaCodigo = Util.codigoDe(err); }
+    }
+    return { alerta: alerta, fila: fila, fila_codigo: filaCodigo };
+  }
+
+  /* e: { cliente_id, codigo, fecha_corte, hash_archivo?, iniciada_utc, terminada_utc, modo? | (guardias?, modo_cliente?) }
+     → fila del libro con estado «error». El modo sale de «modo» o, mejor, de la misma definición de «envío real» que usa M5
+     (guardias + modo del cliente); si no hay ninguno de los dos, es «dry». */
   function filaError(e) {
-    if (!esObjeto(e)) Util.fallar('E_LIBRO_INVALIDO');
+    if (!esObjeto(e) || (e.modo !== undefined && e.guardias !== undefined)) Util.fallar('E_LIBRO_INVALIDO');
+    var real = e.guardias !== undefined ? M5.esEnvioReal(e.guardias, e.modo_cliente) : e.modo === 'real';
     return M6.filaLibro({
       cliente_id: e.cliente_id, semana_iso: Util.semanaISO(e.fecha_corte), hash_archivo: e.hash_archivo === undefined ? M7.HUELLA_SIN_ARCHIVO : e.hash_archivo,
       estado: 'error', iniciada_utc: e.iniciada_utc, terminada_utc: e.terminada_utc,
-      n_filas: 0, n_vencidas: 0, n_apartadas: 0, codigo_error: e.codigo, modo: e.modo === 'real' ? 'real' : 'dry'
+      n_filas: 0, n_vencidas: 0, n_apartadas: 0, codigo_error: e.codigo, modo: real ? 'real' : 'dry'
     });
   }
 
   return {
-    validarConfiguracion: validarConfiguracion, fechaCorteDe: fechaCorteDe, arrancar: arrancar, preparar: preparar,
-    armarEnvio: armarEnvio, alertaOperador: alertaOperador, filaError: filaError
+    validarConfiguracion: validarConfiguracion, fechaCorteDe: fechaCorteDe, arrancar: arrancar, iniciar: iniciar,
+    elegirArchivo: elegirArchivo, claveAviso: claveAviso, claveArchivo: claveArchivo, decidirAviso: decidirAviso,
+    decidirProcesado: decidirProcesado, preparar: preparar, armarEnvio: armarEnvio, alertaOperador: alertaOperador,
+    filaError: filaError, manejarError: manejarError
   };
 })();

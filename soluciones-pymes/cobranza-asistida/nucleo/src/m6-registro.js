@@ -8,6 +8,8 @@
      fechas, códigos). Una columna de más, o un valor con forma de texto libre, es un error.
    · claveEjecucion / decidirEjecucion / estadoBloqueo: idempotencia y bloqueo como funciones puras,
      para probarlas a fondo; el flujo solo conecta las tablas de datos.
+   · bloqueoVigente / yaResuelto / filaBloqueo: del contenido de las tablas (filas) a la decisión, y la
+     fila de un bloqueo nuevo; el flujo lee y escribe filas, nunca interpreta su significado.
    ========================================================================== */
 var M6 = (function () {
   'use strict';
@@ -41,7 +43,7 @@ var M6 = (function () {
   // Nombre de flujo o de nodo: solo letras, números, espacios y unos pocos signos; nada que pueda partir un texto.
   function nombreSeguro(v) {
     var s = Util.limpiar(v).slice(0, 80);
-    s = s.replace(/[^A-Za-z0-9À-ÿ _.:()\[\]\/·-]/g, '?');
+    s = s.replace(/[^A-Za-z0-9\u00c0-\u00ff _.:()\[\]\/\u00b7-]/g, '?');
     return s || 'desconocido';
   }
 
@@ -117,9 +119,64 @@ var M6 = (function () {
     return 'procesar';
   }
 
+  /* ------------------------------------ de las filas de las tablas a una decisión */
+
+  // El flujo lee las tablas y entrega FILAS; estas funciones deciden qué significan. Así ninguna regla vive en un nodo suelto.
+
+  var MAX_FILAS_BLOQUEO = 50;
+  var MAX_FILAS_LIBRO = 1000;
+  var MINUTOS_BLOQUEO = 30;
+  var CLAVE_LIBRO_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,39}\|\d{4}-W\d{2}\|[0-9a-f]{64}$/;
+
+  function esFila(f) { return f !== null && typeof f === 'object' && !Array.isArray(f); }
+
+  // filas: lo que devuelve la tabla de bloqueos al filtrar por cliente (normalmente 0 o 1; varias solo por una carrera rara).
+  // Devuelve la de caducidad más lejana (la más restrictiva) o null si no hay ninguna. Una fila ajena o mal formada es un defecto.
+  function bloqueoVigente(filas, clienteId) {
+    if (!Util.idValido(clienteId) || !Array.isArray(filas) || filas.length > MAX_FILAS_BLOQUEO) Util.fallar('E_BLOQUEO_INVALIDO');
+    var mejor = null;
+    filas.forEach(function (f) {
+      if (!esFila(f) || f.cliente_id !== clienteId || !utcValido(f.expira_utc)) Util.fallar('E_BLOQUEO_INVALIDO');
+      if (mejor === null || utcCanonico(f.expira_utc) > utcCanonico(mejor.expira_utc)) mejor = { cliente_id: f.cliente_id, expira_utc: f.expira_utc };
+    });
+    return mejor;
+  }
+
+  // filas: lo que devuelve el libro al filtrar por CLIENTE (todas sus ejecuciones). «Resuelto» = hay una fila «ok» o «incidencia»
+  // con ESA clave (una fila «error» u «omitida» no cuenta: así se reintenta; las de otra semana o archivo del mismo cliente
+  // se ignoran). Una fila de OTRO cliente, o sin clave o estado válidos, es un defecto: el filtro del flujo está mal.
+  function yaResuelto(filas, clave) {
+    if (typeof clave !== 'string' || !CLAVE_LIBRO_RE.test(clave) || !Array.isArray(filas) || filas.length > MAX_FILAS_LIBRO) Util.fallar('E_LIBRO_INVALIDO');
+    var cliente = clave.slice(0, clave.indexOf('|'));
+    var resuelto = false;
+    filas.forEach(function (f) {
+      if (!esFila(f) || typeof f.clave !== 'string' || f.clave.indexOf('|') !== cliente.length || f.clave.slice(0, cliente.length) !== cliente || ESTADOS.indexOf(f.estado) < 0) Util.fallar('E_LIBRO_INVALIDO');
+      if (f.clave === clave && (f.estado === 'ok' || f.estado === 'incidencia')) resuelto = true;
+    });
+    return resuelto;
+  }
+
+  // e: { cliente_id, ahora_utc, minutos? } → { cliente_id, expira_utc }. Caduca «minutos» después de «ahora» (30 por defecto, de 1 a 240).
+  // Aritmética entera sobre el texto del instante, sin reloj ni Date: se descartan las milésimas y se prueba contra un oráculo.
+  function filaBloqueo(e) {
+    if (!esFila(e) || !Util.idValido(e.cliente_id) || !utcValido(e.ahora_utc)) Util.fallar('E_BLOQUEO_INVALIDO');
+    var minutos = e.minutos === undefined ? MINUTOS_BLOQUEO : e.minutos;
+    if (!(typeof minutos === 'number' && Math.floor(minutos) === minutos && minutos >= 1 && minutos <= 240)) Util.fallar('E_BLOQUEO_INVALIDO');
+    var total = (+e.ahora_utc.slice(11, 13)) * 60 + (+e.ahora_utc.slice(14, 16)) + minutos;
+    var dias = Math.floor(total / 1440);
+    var resto = total - dias * 1440;
+    var fecha = dias > 0 ? Util.sumarDias(e.ahora_utc.slice(0, 10), dias) : e.ahora_utc.slice(0, 10);
+    if (!Util.esISO(fecha)) Util.fallar('E_BLOQUEO_INVALIDO'); // pasar de 2099 queda fuera del rango admitido
+    return {
+      cliente_id: e.cliente_id,
+      expira_utc: fecha + 'T' + Util.pad2(Math.floor(resto / 60)) + ':' + Util.pad2(resto % 60) + ':' + e.ahora_utc.slice(17, 19) + 'Z'
+    };
+  }
+
   return {
-    ESTADOS: ESTADOS, MODOS: MODOS, CLAVES_LIBRO: CLAVES_LIBRO,
+    ESTADOS: ESTADOS, MODOS: MODOS, CLAVES_LIBRO: CLAVES_LIBRO, MINUTOS_BLOQUEO: MINUTOS_BLOQUEO,
     sanearError: sanearError, textoAlerta: textoAlerta, claveEjecucion: claveEjecucion, filaLibro: filaLibro,
-    estadoBloqueo: estadoBloqueo, decidirEjecucion: decidirEjecucion
+    estadoBloqueo: estadoBloqueo, decidirEjecucion: decidirEjecucion,
+    bloqueoVigente: bloqueoVigente, yaResuelto: yaResuelto, filaBloqueo: filaBloqueo
   };
 })();

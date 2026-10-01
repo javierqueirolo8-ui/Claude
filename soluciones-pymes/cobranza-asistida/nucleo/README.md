@@ -1,9 +1,9 @@
-# Núcleo de cobranza asistida · Etapa 1
+# Núcleo de cobranza asistida · Etapas 1 y 2
 
-**Estado (30-sep-2026): Etapa 1 terminada.** Es el código que decide todo lo importante del servicio, escrito como
-funciones **puras** y probado por completo **antes** de construir nada en n8n. No hay n8n, ni red, ni datos reales, ni
-correos: solo JavaScript, datos inventados y pruebas. La Etapa 2 (armar el flujo en tu servidor de Oracle como banco de
-pruebas) **espera tu OK**.
+**Estado (1-oct-2026): Etapa 1 terminada y Etapa 2 construida en el banco de pruebas de n8n.** El código que decide todo lo importante del
+servicio está escrito como funciones **puras** y probado por completo; con él se armaron en tu servidor tres flujos `[COB-DEV]` (el núcleo, el
+flujo diario y unas utilidades de prueba), con datos **100 % ficticios**, **nada activo ni publicado**, sin credenciales y sin enviar nada a nadie.
+Verificados contra el simulador en 54 pasos; falta correr en n8n la serie de roturas de infraestructura a propósito (ver [Los flujos de n8n](#los-flujos-de-n8n-etapa-2)).
 
 ## Qué es y qué no es
 
@@ -17,7 +17,7 @@ pruebas) **espera tu OK**.
 ## Cómo verificar (segundos, sin red)
 
 ```bash
-./verificar.sh                 # sintaxis, ejemplos al día, todas las pruebas en 6 zonas horarias, informe en Chromium
+./verificar.sh                 # sintaxis, ejemplos al día, todas las pruebas en 6 zonas horarias, paquete y flujos de n8n al día, informe en Chromium
 ./verificar.sh --profundo      # además, 10 veces más casos al azar
 ./verificar.sh --mutaciones    # además, las pruebas de mutación (varios minutos)
 ./verificar.sh --todo
@@ -85,7 +85,7 @@ Si algo falla en cualquier punto: alerta a Javier **solo con códigos** (M6), fi
 | El mismo archivo no se procesa dos veces, tampoco al cruzar el lunes (la semana de la clave es la de la **exportación**); una caída no duplica ni pierde el informe. | Escenarios de `e2e.test.js`: archivo fresco que cruza el lunes, re-exportación la semana siguiente, doble ejecución intercalada, caída antes y después de enviar, correo caído, descarga cortada. |
 | El informe es inerte: sin scripts, sin red, todo texto del archivo escapado. | `m4.test.js` (lista de etiquetas permitidas), `navegador.js` (Chromium real, sin JavaScript, datos hostiles, contraste, móvil). |
 | El código es puro y no esconde nada. | Cargador de pruebas sin `require`, red, archivos, reloj ni azar; `guardarrailes.test.js` (sin caracteres invisibles «Trojan Source», solo códigos literales, sin `throw` con texto libre, catálogo al día, sin credenciales). |
-| Las pruebas detectan las averías. | `mutaciones.js`: 102 averías provocadas de a una (destinatario sin filtrar, fecha desplazada, moneda mezclada, informe sin escapar…); cada una debe hacer fallar alguna prueba. Dos están **toleradas con la razón escrita** (una red de seguridad inalcanzable y un mutante equivalente). |
+| Las pruebas detectan las averías. | `mutaciones.js`: 140 averías provocadas de a una (destinatario sin filtrar, fecha desplazada, moneda mezclada, informe sin escapar…); cada una debe hacer fallar alguna prueba. Dos están **toleradas con la razón escrita** (una red de seguridad inalcanzable y un mutante equivalente). Los generadores de los flujos de n8n tienen otras 19 (`n8n/mutaciones-flujos.js`). |
 
 ## Datos ficticios y demostración
 
@@ -109,15 +109,36 @@ Lo que hoy **no** hace, a propósito o por no haber datos reales:
    y las fechas no se ven afectados).
 5. **Hojas nativas de Google Sheets** no se leen: se exporta a CSV o XLSX. El XLSX tiene un tope de tamaño menor (2 MB) por ser
    un archivo comprimido; se prefiere CSV.
-6. El simulador (`tests/simulador.js`) es un **modelo** del flujo, no el flujo: lo que dependa de n8n (el entorno de los nodos de
-   código, las tablas de datos, el nodo de Drive, el envío por Gmail) se prueba recién en la Etapa 2.
+6. El simulador (`tests/simulador.js`) es un **modelo** del flujo, no el flujo. Se contrastó con n8n en 54 pasos (ver abajo), pero el nodo
+   de Drive y el envío por Gmail siguen **simulados con tablas**: lo que dependa de ellos se prueba recién en la Etapa 3, con credenciales.
 7. Un duplicado del informe es posible si el servidor cae **entre enviar y registrar** (sale al mismo buzón del dueño; el bloqueo
    impide que ocurra solo, hace falta limpiarlo a mano). Es un costo aceptado y documentado en el documento 03, sección 8.
 
-## Cómo pasa a n8n (Etapa 2, con tu OK)
+## Los flujos de n8n (Etapa 2)
 
-1. Un generador inserta `util.js` + cada módulo en su nodo de código, y una **prueba de deriva** comprueba que el código del
-   flujo es idéntico al de estos archivos: se prueba lo que se ejecuta.
-2. Las llamadas a Drive, tablas y correo se convierten siempre en un código propio (`E_DRIVE_LISTAR`, `E_CORREO_ENVIAR`…);
-   el mensaje del servicio externo nunca se reenvía.
-3. Todo empieza con **datos ficticios**, prefijo `[COB-DEV]`, envío solo a tu bandeja y nada activo.
+Todo vive en [`n8n/`](n8n/). Los flujos se **generan** desde acá y se suben copiando su texto; nada se escribe a mano en el servidor.
+
+| Archivo | Para qué |
+|---|---|
+| `n8n/generar.js` | Genera `dist/nucleo-bundle.js` (util + M0 a M7 + pipeline + envoltorio, sin comentarios) y el flujo «[COB-DEV] Núcleo (puro)». |
+| `n8n/generar-shell.js` | Genera el flujo diario «[COB-DEV] Shell demo-01» (65 nodos) y su especificación de nodos y conexiones. |
+| `n8n/generar-utilidades.js` | Genera «[COB-DEV] Utilidades de prueba»: fija la tabla de control, limpia un cliente `esc-…` y compara tablas. Solo toca clientes `esc-…`. |
+| `n8n/canonico.js` · `n8n/escenarios.js` | La forma canónica de lo que dejan las pruebas y los **42 escenarios** con lo que debe dejar cada uno (sale del simulador). `node n8n/escenarios.js lista` los muestra. |
+| `n8n/comparar-despliegue.js` | Compara lo guardado en el servidor (`get_workflow_details`) con lo generado: mismos nodos, valores y conexiones; inactivo; sin datos fijados. |
+| `n8n/probar-paquete.js` | Corre **toda** la batería contra el código del paquete, para probar lo que de verdad se ejecuta. |
+| `n8n/mutaciones-flujos.js` | Averías provocadas a los generadores de los flujos (una salida de error menos, un bloqueo que se libera sin mirar la caducidad, un cliente que no es de prueba…): `tests/n8n-flujos.test.js` tiene que detectar cada una. Se corre con `./verificar.sh --mutaciones`. |
+
+Cómo se comprueba que el flujo real hace lo que el modelo: cada escenario corre en el simulador y en n8n y las dos tablas resultantes se comparan por huella
+SHA-256 (detalle y reglas aprendidas en el [documento 03, sección 11](../docs/03-arquitectura-n8n.md#11-estrategia-de-pruebas)). Los códigos de error propios del flujo
+(`E_TABLA_LEER`, `E_TABLA_ESCRIBIR`, `E_HUELLA`, `E_NUCLEO_FALLO`, `E_FLUJO_FALLO`…) están en [`CODIGOS.md`](CODIGOS.md), sección 9.
+
+**Pendiente en n8n:** la serie de **roturas a propósito** (`node n8n/escenarios.js roturas` imprime las operaciones para aplicarlas de una vez, cada una vale solo para su cliente de prueba, y
+cómo deshacerlas). El flujo de alertas pasa a la Etapa 3.
+
+## Cómo seguir (con tu OK)
+
+1. Etapa 2: correr la serie de roturas y la guía de verificación manual (nivel 9) para el Punto de control 3.
+2. Etapa 3 (solo con un cliente que confirme interés real, unipersonal constituida y las demás condiciones del documento 03): credenciales de Drive y Gmail creadas por ti,
+   flujo de alertas, y datos reales con informe enmascarado.
+3. Siempre: las llamadas a Drive, tablas y correo se convierten en un código propio y el mensaje del servicio externo nunca se reenvía; todo empieza con datos ficticios,
+   prefijo `[COB-DEV]` y nada activo.

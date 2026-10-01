@@ -74,10 +74,11 @@ test('los módulos no usan red, archivos, reloj, azar, eval, entorno ni consola'
 const DEPENDENCIAS = {
   'util.js': [], 'm0-guardias.js': [], 'm1-normalizar.js': [], 'm2-antiguedad.js': [], 'm3-borradores.js': [], 'm4-informe.js': [],
   'm5-guardia-envio.js': [], 'm6-registro.js': [], 'm7-ingesta.js': [],
-  'pipeline.js': ['M0', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7']
+  'pipeline.js': ['M0', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7'],
+  'envoltorio.js': []
 };
 
-test('cada módulo depende solo de Util (el pipeline, de todos los módulos): se puede pegar solo en un nodo de n8n', () => {
+test('cada módulo depende solo de Util (el pipeline, de todos los módulos; el envoltorio, del pipeline): se puede pegar en un nodo de n8n', () => {
   assert.deepEqual(modulos.sort(), Object.keys(DEPENDENCIAS).sort(), 'un módulo nuevo debe declararse aquí');
   for (const f of modulos) {
     const t = fuente(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, ''); // sin comentarios
@@ -96,7 +97,7 @@ test('cada módulo se carga por sí solo con Util y expone lo que promete (indep
     'm3-borradores.js': ['M3', ['generarBorradores', 'validarPlantillas', 'validarEmpresa', 'renderizar']],
     'm4-informe.js': ['M4', ['armarInforme', 'armarCorreoConEnlace', 'armarAvisoIncidencia', 'armarAvisoSinArchivo']],
     'm5-guardia-envio.js': ['M5', ['guardiaEnvio', 'esEnvioReal']],
-    'm6-registro.js': ['M6', ['sanearError', 'textoAlerta', 'claveEjecucion', 'filaLibro', 'estadoBloqueo', 'decidirEjecucion']],
+    'm6-registro.js': ['M6', ['sanearError', 'textoAlerta', 'claveEjecucion', 'filaLibro', 'estadoBloqueo', 'decidirEjecucion', 'bloqueoVigente', 'yaResuelto', 'filaBloqueo']],
     'm7-ingesta.js': ['M7', ['elegirArchivo', 'verificarDescarga', 'diaDeSemanaISO', 'decidirSinArchivo']]
   };
   for (const [archivo, [nombre, funciones]] of Object.entries(esperados)) {
@@ -194,7 +195,8 @@ test('el código solo conoce dos servidores: el de WhatsApp (enlaces que abre un
 // (prefijos de armado, claves internas de conteo, patrones de documentación).
 const NO_SON_CODIGOS = new Set(['E_CFG_', 'E_ENVIO_', 'E_DISPUTA_NO_ENTENDIDA', 'E_EMISION_INVALIDA', 'E_MAIL_INVALIDO', 'E_TEL_FIJO', 'E_TEL_INVALIDO',
   'E_VENCIMIENTO_ANTERIOR_EMISION']);
-const DEL_SHELL = new Set(['E_DRIVE_LISTAR', 'E_DRIVE_DESCARGAR', 'E_DRIVE_SUBIR', 'E_CORREO_ENVIAR', 'E_ARCHIVO_AMBIGUO', 'E_BLOQUEO_VENCIDO']);
+const DEL_SHELL = new Set(['E_DRIVE_LISTAR', 'E_DRIVE_DESCARGAR', 'E_DRIVE_SUBIR', 'E_CORREO_ENVIAR', 'E_ARCHIVO_AMBIGUO', 'E_BLOQUEO_VENCIDO',
+  'E_TABLA_LEER', 'E_TABLA_ESCRIBIR', 'E_HUELLA', 'E_NUCLEO_FALLO', 'E_FLUJO_FALLO']);
 
 test('el catálogo de códigos (CODIGOS.md) coincide con los códigos del código fuente', () => {
   const catalogo = new Set([...leer(path.join(RAIZ, 'CODIGOS.md')).matchAll(/`([EA]_[A-Z][A-Z0-9_]{1,39})`/g)].map((m) => m[1]));
