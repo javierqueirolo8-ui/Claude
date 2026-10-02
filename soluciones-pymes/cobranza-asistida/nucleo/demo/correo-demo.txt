@@ -1,0 +1,27 @@
+Asunto: EJEMPLO · Resumen semanal de cobranza · 05/10/2026 · 13 facturas vencidas
+Para: administracion@ferreteria-ficticia.example
+
+Resumen de cobranza · Ferretería Ficticia S.R.L. · al 05/10/2026
+
+Facturas vencidas: 13
+  · $U: 9 facturas por $U 3.005.412,49
+  · US$: 4 facturas por US$ 7.041,93
+
+Por antigüedad ($U):
+  · 1 a 30 días: 5 facturas por $U 2.370.644,28
+  · 31 a 60 días: 1 factura por $U 18.846,76
+  · 61 a 90 días: 3 facturas por $U 615.921,45
+  · Más de 90 días: 0 facturas
+
+Por antigüedad (US$):
+  · 1 a 30 días: 1 factura por US$ 6.129,64
+  · 31 a 60 días: 0 facturas
+  · 61 a 90 días: 0 facturas
+  · Más de 90 días: 3 facturas por US$ 912,29
+
+Vencidas en los últimos 7 días: 4
+
+Informe completo, con los borradores por cliente (solo lo abre quien tenga acceso a la carpeta):
+https://drive.google.com/file/d/1EjemploFicticioDeInforme0001/view
+
+Antes de enviar, revisar cada mensaje. Este correo no se envió a ningún cliente.

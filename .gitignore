@@ -16,3 +16,12 @@ __pycache__/
 # Sistema
 .DS_Store
 node_modules/
+
+# Preferencias locales de Claude Code (permisos de esta máquina; no se comparten)
+.claude/settings.local.json
+
+# Datos reales de prospección y entrevistas: NUNCA al repositorio
+# (contienen datos personales; ver soluciones-pymes/cobranza-asistida/docs/02-criterios-lista-objetivo.md)
+soluciones-pymes/**/datos-reales/
+soluciones-pymes/**/*.real.*
+soluciones-pymes/**/*-real.*

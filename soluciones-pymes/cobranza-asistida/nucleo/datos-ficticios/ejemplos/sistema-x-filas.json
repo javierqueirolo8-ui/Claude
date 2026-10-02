@@ -1,0 +1,200 @@
+[
+  {
+    "Factura": "A-1276",
+    "Razón social": "Ferretería Ejemplar 04 y Asociados",
+    "Saldo pendiente": 239025.25,
+    "Moneda": "UYU",
+    "Emitida": 46151,
+    "Vencimiento": 46181,
+    "Celular": 99000005,
+    "Mail": "",
+    "Disputa": ""
+  },
+  {
+    "Factura": "A-1277",
+    "Razón social": "Librería Ejemplar 06",
+    "Saldo pendiente": 1274.07,
+    "Moneda": "UYU",
+    "Emitida": 46158,
+    "Vencimiento": 46203,
+    "Celular": "",
+    "Mail": "compras@libreria-ejemplar-06.example",
+    "Disputa": ""
+  },
+  {
+    "Factura": "A-1278",
+    "Razón social": "Panadería Muestra 07 S.R.L.",
+    "Saldo pendiente": 9595.11,
+    "Moneda": "UYU",
+    "Emitida": 46255,
+    "Vencimiento": 46315,
+    "Celular": 99000006,
+    "Mail": "",
+    "Disputa": ""
+  },
+  {
+    "Factura": "B-1280",
+    "Razón social": "Taller Ilustrativa 01",
+    "Saldo pendiente": 8033.54,
+    "Moneda": "UYU",
+    "Emitida": 46195,
+    "Vencimiento": 46255,
+    "Celular": 99000010,
+    "Mail": "",
+    "Disputa": ""
+  },
+  {
+    "Factura": "A-1282",
+    "Razón social": "Estudio Imaginaria 05 y Asociados",
+    "Saldo pendiente": 35153.78,
+    "Moneda": "UYU",
+    "Emitida": 46205,
+    "Vencimiento": 46295,
+    "Celular": 99000002,
+    "Mail": "compras@estudio-imaginaria-05.example",
+    "Disputa": ""
+  },
+  {
+    "Factura": "A-1285",
+    "Razón social": "Ferretería Ejemplar 04 y Asociados",
+    "Saldo pendiente": 3187.5,
+    "Moneda": "USD",
+    "Emitida": 46178,
+    "Vencimiento": 46223,
+    "Celular": 99000005,
+    "Mail": "",
+    "Disputa": ""
+  },
+  {
+    "Factura": "A-1286",
+    "Razón social": "Estudio Imaginaria 05 y Asociados",
+    "Saldo pendiente": 869.73,
+    "Moneda": "USD",
+    "Emitida": 46204,
+    "Vencimiento": 46249,
+    "Celular": 99000002,
+    "Mail": "compras@estudio-imaginaria-05.example",
+    "Disputa": ""
+  },
+  {
+    "Factura": "B-1288",
+    "Razón social": "Panadería Muestra 07 S.R.L.",
+    "Saldo pendiente": 950.42,
+    "Moneda": "UYU",
+    "Emitida": 46242,
+    "Vencimiento": 46272,
+    "Celular": 99000006,
+    "Mail": "",
+    "Disputa": ""
+  },
+  {
+    "Factura": "A-1290",
+    "Razón social": "Panadería Muestra 07 S.R.L.",
+    "Saldo pendiente": 704610.09,
+    "Moneda": "UYU",
+    "Emitida": 46176,
+    "Vencimiento": 46236,
+    "Celular": 99000006,
+    "Mail": "",
+    "Disputa": ""
+  },
+  {
+    "Factura": "A-1293",
+    "Razón social": "Panadería Muestra 07 S.R.L.",
+    "Saldo pendiente": 6329.09,
+    "Moneda": "UYU",
+    "Emitida": 46260,
+    "Vencimiento": 46290,
+    "Celular": 99000006,
+    "Mail": "",
+    "Disputa": ""
+  },
+  {
+    "Factura": "A-1295",
+    "Razón social": "Estudio Imaginaria 05 y Asociados",
+    "Saldo pendiente": 515779.7,
+    "Moneda": "UYU",
+    "Emitida": 46247,
+    "Vencimiento": 46292,
+    "Celular": 99000002,
+    "Mail": "compras@estudio-imaginaria-05.example",
+    "Disputa": ""
+  },
+  {
+    "Factura": "B-1296",
+    "Razón social": "Librería Ejemplar 06",
+    "Saldo pendiente": 332909.67,
+    "Moneda": "UYU",
+    "Emitida": 46176,
+    "Vencimiento": 46221,
+    "Celular": "",
+    "Mail": "compras@libreria-ejemplar-06.example",
+    "Disputa": ""
+  },
+  {
+    "Factura": "A-1298",
+    "Razón social": "Mueblería Inventada 03 S.A.",
+    "Saldo pendiente": 278059.4,
+    "Moneda": "UYU",
+    "Emitida": 46200,
+    "Vencimiento": 46230,
+    "Celular": 99000006,
+    "Mail": "",
+    "Disputa": ""
+  },
+  {
+    "Factura": "B-1300",
+    "Razón social": "Mueblería Imaginaria 02 S.R.L.",
+    "Saldo pendiente": 87662.65,
+    "Moneda": "UYU",
+    "Emitida": 46187,
+    "Vencimiento": 46277,
+    "Celular": 99000008,
+    "Mail": "",
+    "Disputa": "SI"
+  },
+  {
+    "Factura": "A-1303",
+    "Razón social": "Panadería Muestra 07 S.R.L.",
+    "Saldo pendiente": 375264.24,
+    "Moneda": "UYU",
+    "Emitida": 46243,
+    "Vencimiento": 46303,
+    "Celular": 99000006,
+    "Mail": "",
+    "Disputa": ""
+  },
+  {
+    "Factura": "A-1304",
+    "Razón social": "Mueblería Inventada 03 S.A.",
+    "Saldo pendiente": 432300.29,
+    "Moneda": "UYU",
+    "Emitida": 46217,
+    "Vencimiento": 46277,
+    "Celular": 99000006,
+    "Mail": "",
+    "Disputa": ""
+  },
+  {
+    "Factura": "A-1307",
+    "Razón social": "Ferretería Ejemplar 04 y Asociados",
+    "Saldo pendiente": 335876.63,
+    "Moneda": "UYU",
+    "Emitida": 46184,
+    "Vencimiento": 46244,
+    "Celular": 99000005,
+    "Mail": "",
+    "Disputa": ""
+  },
+  {
+    "Factura": "A-1310",
+    "Razón social": "Librería Ejemplar 06",
+    "Saldo pendiente": 143939.49,
+    "Moneda": "UYU",
+    "Emitida": 46235,
+    "Vencimiento": 46280,
+    "Celular": "",
+    "Mail": "compras@libreria-ejemplar-06.example",
+    "Disputa": ""
+  }
+]

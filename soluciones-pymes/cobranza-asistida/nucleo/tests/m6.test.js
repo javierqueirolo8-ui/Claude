@@ -1,0 +1,560 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { cargar, plano, capturar } = require('./cargar');
+const azar = require('./azar');
+
+const { Util, M6 } = cargar('util', 'm6-registro');
+
+const HUELLA = 'a'.repeat(64);
+const OTRA_HUELLA = 'b'.repeat(64);
+const FILA = () => ({
+  cliente_id: 'demo-01', semana_iso: '2026-W41', hash_archivo: HUELLA, estado: 'ok',
+  iniciada_utc: '2026-10-05T11:00:00Z', terminada_utc: '2026-10-05T11:00:04Z',
+  n_filas: 120, n_vencidas: 31, n_apartadas: 3, codigo_error: null, modo: 'dry'
+});
+const codigo = (fn) => { const r = capturar(fn); return r.ok ? null : r.codigo; };
+
+/* ------------------------------------------------------------ sanearError */
+
+test('el saneador conserva solo el código del error, nunca su mensaje libre', () => {
+  const e = new Error('No se pudo leer a Juan Pérez, factura A 1234, tel 099123456');
+  const s = plano(M6.sanearError(e, { cliente_id: 'demo-01', workflow: 'Cobranza · shell', nodo: 'Leer archivo', ejecucion_id: 4711 }));
+  assert.deepEqual(s, { cliente_id: 'demo-01', workflow: 'Cobranza · shell', nodo: 'Leer archivo', codigo: 'E_DESCONOCIDO', ejecucion_id: '4711' });
+  assert.equal(JSON.stringify(s).includes('Juan'), false);
+});
+
+test('un error con código propio lo conserva; también si el mensaje ES un código', () => {
+  const con = Object.assign(new Error('texto libre con datos'), { codigo: 'E_ARCHIVO_VACIO' });
+  assert.equal(M6.sanearError(con, {}).codigo, 'E_ARCHIVO_VACIO');
+  assert.equal(M6.sanearError(new Error('E_FECHA_INVALIDA'), {}).codigo, 'E_FECHA_INVALIDA');
+  for (const v of [null, undefined, 'texto', 5, {}, { codigo: 'no es un codigo' }, { message: 'E_' }, { codigo: 'E_' + 'X'.repeat(50) }]) {
+    assert.equal(M6.sanearError(v, {}).codigo, 'E_DESCONOCIDO', JSON.stringify(v));
+  }
+});
+
+test('el contexto también se sanea: identificador, flujo, nodo y ejecución', () => {
+  const s = plano(M6.sanearError(new Error('x'), {
+    cliente_id: 'Ferretería Ficticia S.R.L.', workflow: 'Cobranza\nBcc: espia@malo.com <script>', nodo: 'a'.repeat(200), ejecucion_id: 'abc def\n'
+  }));
+  assert.equal(s.cliente_id, 'desconocido');
+  assert.equal(s.ejecucion_id, 'desconocido');
+  assert.equal(s.workflow.includes('\n'), false);
+  assert.equal(/[<>@]/.test(s.workflow), false);
+  assert.ok(s.nodo.length <= 80);
+  assert.deepEqual(Object.keys(s).sort(), ['cliente_id', 'codigo', 'ejecucion_id', 'nodo', 'workflow']);
+});
+
+test('sin contexto, todo queda como «desconocido»', () => {
+  for (const c of [undefined, null, 5, 'x', []]) {
+    const s = plano(M6.sanearError(new Error('x'), c));
+    assert.deepEqual(s, { cliente_id: 'desconocido', workflow: 'desconocido', nodo: 'desconocido', codigo: 'E_DESCONOCIDO', ejecucion_id: 'desconocido' });
+  }
+});
+
+test('identificador de ejecución: números y textos simples sí; el resto no', () => {
+  const id = (v) => M6.sanearError(new Error('x'), { ejecucion_id: v }).ejecucion_id;
+  assert.equal(id(4711), '4711');
+  assert.equal(id('abc-123_X'), 'abc-123_X');
+  for (const v of ['', 'a b', 'a/b', 'a'.repeat(65), null, undefined, {}, '<b>']) assert.equal(id(v), 'desconocido', JSON.stringify(v));
+});
+
+test('canario: un dato del cliente dentro de un error jamás aparece en lo saneado ni en la alerta', () => {
+  const CANARIO = 'CANARIO_DEUDOR_9921';
+  const e = Object.assign(new Error('fallo con ' + CANARIO), { codigo: 'E_ARCHIVO_INVALIDO', detalle: CANARIO, cause: { fila: CANARIO } });
+  const s = plano(M6.sanearError(e, { cliente_id: 'demo-01', workflow: 'flujo', nodo: 'nodo', ejecucion_id: 7, dato: CANARIO }));
+  const t = plano(M6.textoAlerta(s));
+  assert.equal(JSON.stringify(s).includes(CANARIO), false);
+  assert.equal(JSON.stringify(t).includes(CANARIO), false);
+});
+
+/* ----------------------------------------------------------------- alerta */
+
+test('la alerta tiene asunto y cuerpo con solo código, cliente, flujo, nodo y ejecución', () => {
+  const s = M6.sanearError(Object.assign(new Error('x'), { codigo: 'E_ARCHIVO_VACIO' }), { cliente_id: 'demo-01', workflow: 'Cobranza · shell', nodo: 'Leer archivo', ejecucion_id: 12 });
+  const t = plano(M6.textoAlerta(s));
+  assert.equal(t.asunto, 'Error en cobranza · demo-01 · E_ARCHIVO_VACIO');
+  assert.equal(t.cuerpo_texto.split('\n')[0], 'Cliente: demo-01');
+  assert.match(t.cuerpo_texto, /Código: E_ARCHIVO_VACIO/);
+  assert.match(t.cuerpo_texto, /Ejecución: 12/);
+  assert.match(t.cuerpo_texto, /no contiene datos del archivo del cliente/);
+  assert.equal(t.asunto.includes('\n'), false);
+});
+
+test('la alerta rechaza lo que no viene saneado y no deja pasar saltos de línea ni direcciones', () => {
+  for (const v of [null, undefined, 'x', 5, {}, { codigo: 'no' }, { codigo: 'E_' }, { codigo: 'e_minuscula' }]) {
+    assert.equal(codigo(() => M6.textoAlerta(v)), 'E_ALERTA_INVALIDA', JSON.stringify(v));
+  }
+  const t = plano(M6.textoAlerta({ cliente_id: 'x\r\nBcc: a@b.com', workflow: 'w\nBcc: a@b.com', nodo: '<n>', codigo: 'E_PRUEBA', ejecucion_id: '1\n2' }));
+  assert.equal(t.asunto.includes('\n') || t.asunto.includes('\r'), false);
+  assert.equal(/@|<|>/.test(t.cuerpo_texto), false);
+  assert.equal(t.cuerpo_texto.split('\n').length, 7);
+});
+
+/* --------------------------------------------------------- claveEjecucion */
+
+test('la clave junta cliente, semana ISO y huella del archivo', () => {
+  assert.equal(M6.claveEjecucion('demo-01', '2026-10-05', HUELLA), 'demo-01|2026-W41|' + HUELLA);
+  assert.equal(M6.claveEjecucion('demo-01', '2026-10-11', HUELLA), 'demo-01|2026-W41|' + HUELLA); // domingo de la misma semana
+  assert.equal(M6.claveEjecucion('demo-01', '2026-10-12', HUELLA), 'demo-01|2026-W42|' + HUELLA);
+});
+
+test('semanas ISO en los bordes del año', () => {
+  const sem = (f) => M6.claveEjecucion('c', f, HUELLA).split('|')[1];
+  assert.equal(sem('2026-01-01'), '2026-W01');
+  assert.equal(sem('2025-12-29'), '2026-W01');
+  assert.equal(sem('2027-01-03'), '2026-W53');
+  assert.equal(sem('2027-01-04'), '2027-W01');
+});
+
+test('otra huella, otro cliente u otra semana: otra clave; lo mismo: la misma', () => {
+  const k = M6.claveEjecucion('demo-01', '2026-10-05', HUELLA);
+  assert.equal(M6.claveEjecucion('demo-01', '2026-10-05', HUELLA), k);
+  assert.notEqual(M6.claveEjecucion('demo-01', '2026-10-05', OTRA_HUELLA), k);
+  assert.notEqual(M6.claveEjecucion('demo-02', '2026-10-05', HUELLA), k);
+  assert.notEqual(M6.claveEjecucion('demo-01', '2026-10-12', HUELLA), k);
+});
+
+test('la clave rechaza entradas inválidas con un código, sin repetir el valor', () => {
+  const malos = [
+    ['', '2026-10-05', HUELLA], ['a b', '2026-10-05', HUELLA], [5, '2026-10-05', HUELLA], ['demo', '05/10/2026', HUELLA],
+    ['demo', '2026-02-30', HUELLA], ['demo', null, HUELLA], ['demo', '2026-10-05', 'a'.repeat(63)], ['demo', '2026-10-05', 'A'.repeat(64)],
+    ['demo', '2026-10-05', 'g'.repeat(64)], ['demo', '2026-10-05', null], ['demo', '2026-10-05', 5]
+  ];
+  for (const a of malos) {
+    const r = capturar(() => M6.claveEjecucion(...a));
+    assert.equal(r.ok, false, JSON.stringify(a));
+    assert.equal(r.codigo, 'E_LIBRO_INVALIDO');
+    assert.equal(r.mensaje, 'E_LIBRO_INVALIDO');
+  }
+});
+
+/* -------------------------------------------------------------- filaLibro */
+
+test('una fila válida se acepta y devuelve su clave', () => {
+  const f = plano(M6.filaLibro(FILA()));
+  assert.equal(f.clave, 'demo-01|2026-W41|' + HUELLA);
+  assert.deepEqual(Object.keys(f).sort(), ['clave', ...M6.CLAVES_LIBRO].sort());
+  assert.equal(f.codigo_error, null);
+});
+
+test('la clave de la fila coincide con claveEjecucion de una fecha de esa semana', () => {
+  const f = plano(M6.filaLibro(FILA()));
+  assert.equal(f.clave, M6.claveEjecucion('demo-01', '2026-10-07', HUELLA));
+});
+
+test('una ejecución con error lleva su código y ceros en los contadores que no llegó a calcular', () => {
+  const f = plano(M6.filaLibro({ ...FILA(), estado: 'error', codigo_error: 'E_ARCHIVO_INVALIDO', n_filas: 0, n_vencidas: 0, n_apartadas: 0 }));
+  assert.equal(f.estado, 'error');
+  assert.equal(f.codigo_error, 'E_ARCHIVO_INVALIDO');
+});
+
+test('«omitida» y el modo real también son válidos; el código de error puede faltar', () => {
+  const d = FILA();
+  delete d.codigo_error;
+  d.estado = 'omitida';
+  d.modo = 'real';
+  const f = plano(M6.filaLibro(d));
+  assert.equal(f.estado, 'omitida');
+  assert.equal(f.modo, 'real');
+  assert.equal(f.codigo_error, null);
+});
+
+test('estado y código van juntos: error e incidencia exigen código; «ok» no puede llevarlo', () => {
+  const inc = plano(M6.filaLibro({ ...FILA(), estado: 'incidencia', codigo_error: 'E_DEMASIADAS_APARTADAS' }));
+  assert.equal(inc.estado, 'incidencia');
+  assert.equal(inc.codigo_error, 'E_DEMASIADAS_APARTADAS');
+  for (const estado of ['incidencia', 'error']) {
+    assert.equal(codigo(() => M6.filaLibro({ ...FILA(), estado, codigo_error: null })), 'E_LIBRO_INVALIDO', estado + ' sin código');
+    assert.equal(codigo(() => M6.filaLibro({ ...FILA(), estado, codigo_error: undefined })), 'E_LIBRO_INVALIDO', estado + ' sin código (ausente)');
+  }
+  assert.equal(codigo(() => M6.filaLibro({ ...FILA(), estado: 'ok', codigo_error: 'E_PRUEBA' })), 'E_LIBRO_INVALIDO');
+  for (const c of [null, 'E_PRUEBA']) assert.equal(M6.filaLibro({ ...FILA(), estado: 'omitida', codigo_error: c }).estado, 'omitida');
+});
+
+test('ni una columna de más: nombres, correos, importes o cualquier otro dato no entran en el libro', () => {
+  for (const extra of ['deudor_nombre', 'contacto_mail', 'importe_centavos', 'detalle', 'mensaje', 'nombre', 'factura_ref', 'x', '__proto__', 'constructor', 'clave']) {
+    const d = JSON.parse(JSON.stringify(FILA()));
+    Object.defineProperty(d, extra, { value: 'CANARIO', enumerable: true, configurable: true, writable: true });
+    const r = capturar(() => M6.filaLibro(d));
+    assert.equal(r.ok, false, extra);
+    assert.equal(r.codigo, 'E_LIBRO_INVALIDO', extra);
+  }
+  const conProto = JSON.parse('{"__proto__": {"x": 1}, "cliente_id": "demo-01"}');
+  assert.equal(codigo(() => M6.filaLibro(conProto)), 'E_LIBRO_INVALIDO');
+});
+
+test('cada campo de la fila se valida', () => {
+  const malos = {
+    cliente_id: [undefined, '', 'a b', 5, '../x', 'x'.repeat(41)],
+    semana_iso: [undefined, '2026-W4', '2026-W00', '2026-W54', '2026W41', '26-W41', 41, '2026-w41'],
+    hash_archivo: [undefined, 'a'.repeat(63), 'A'.repeat(64), 'z'.repeat(64), null, 5],
+    estado: [undefined, 'OK', 'fallo', 'ok ', null, 1],
+    iniciada_utc: [undefined, '2026-10-05 11:00:00', '2026-10-05T11:00:00', '2026-10-05T11:00:00+00:00', '2026-02-30T11:00:00Z', '2026-10-05T24:00:00Z', '2026-10-05T11:60:00Z', '2026-10-05T11:00:60Z', '2026-10-05T11:00:00.1234Z', 5, null],
+    terminada_utc: [undefined, 'ayer', '2026-13-01T00:00:00Z', 5, null],
+    n_filas: [undefined, -1, 1.5, '5', NaN, Infinity, 1000001, null, true],
+    n_vencidas: [undefined, -1, 1.5, '5', NaN, Infinity, 1000001, null],
+    n_apartadas: [undefined, -1, 1.5, '5', NaN, Infinity, 1000001, null],
+    codigo_error: ['Juan Pérez', 'E_', 'e_minus', 'E_' + 'X'.repeat(41), 5, {}, 'E_CON ESPACIO'],
+    modo: [undefined, 'DRY', 'prod', 'real ', null, true]
+  };
+  for (const [campo, valores] of Object.entries(malos)) {
+    for (const v of valores) {
+      const d = FILA();
+      if (v === undefined) delete d[campo]; else d[campo] = v;
+      if (campo === 'codigo_error' && v === undefined) continue; // falta permitida
+      assert.equal(codigo(() => M6.filaLibro(d)), 'E_LIBRO_INVALIDO', campo + ' = ' + JSON.stringify(v));
+    }
+  }
+});
+
+test('coherencia de contadores: vencidas más apartadas no pueden superar las filas', () => {
+  assert.equal(codigo(() => M6.filaLibro({ ...FILA(), n_filas: 10, n_vencidas: 8, n_apartadas: 3 })), 'E_LIBRO_INVALIDO');
+  assert.equal(M6.filaLibro({ ...FILA(), n_filas: 10, n_vencidas: 7, n_apartadas: 3 }).n_filas, 10);
+  assert.equal(M6.filaLibro({ ...FILA(), n_filas: 0, n_vencidas: 0, n_apartadas: 0 }).n_filas, 0);
+});
+
+test('una fila que no es un objeto es inválida', () => {
+  for (const v of [null, undefined, 'x', 5, [], [FILA()], true]) assert.equal(codigo(() => M6.filaLibro(v)), 'E_LIBRO_INVALIDO', JSON.stringify(v));
+});
+
+test('el libro solo acepta milésimas de 1 a 3 cifras y horas reales', () => {
+  for (const t of ['2026-10-05T11:00:00Z', '2026-10-05T11:00:00.5Z', '2026-10-05T11:00:00.50Z', '2026-10-05T11:00:00.500Z', '2026-10-05T00:00:00Z', '2026-10-05T23:59:59Z']) {
+    assert.equal(M6.filaLibro({ ...FILA(), iniciada_utc: t }).iniciada_utc, t);
+  }
+});
+
+test('canario: un valor rechazado nunca aparece en el mensaje del error', () => {
+  const CANARIO = 'CANARIO LIBRO 5512'; // con espacios: no es válido en ninguna columna
+  for (const campo of ['cliente_id', 'semana_iso', 'hash_archivo', 'estado', 'iniciada_utc', 'codigo_error', 'modo']) {
+    const d = FILA();
+    d[campo] = CANARIO;
+    const r = capturar(() => M6.filaLibro(d));
+    assert.equal(r.ok, false);
+    assert.equal(String(r.mensaje).includes(CANARIO), false);
+    assert.equal(r.mensaje, 'E_LIBRO_INVALIDO');
+  }
+});
+
+test('propiedad: una fila que pasa siempre tiene solo columnas conocidas con contadores enteros y coherentes', () => {
+  const estados = ['ok', 'error', 'incidencia', 'omitida', 'OK', '', null];
+  for (const semilla of azar.semillas(303)) {
+    const az = azar.crear(semilla);
+    let aceptadas = 0;
+    for (let i = 0; i < 4000; i++) {
+      const d = FILA();
+      if (az.prob(0.3)) d.estado = az.elegir(estados);
+      if ((d.estado === 'error' || d.estado === 'incidencia') && az.prob(0.8)) d.codigo_error = 'E_PRUEBA';
+      if (az.prob(0.3)) d.n_filas = az.elegir([0, 1, 10, 100, -1, 1.5, '3', 1000000, 1000001]);
+      if (az.prob(0.3)) d.n_vencidas = az.elegir([0, 1, 5, 200, -2, 0.5]);
+      if (az.prob(0.3)) d.n_apartadas = az.elegir([0, 1, 5, 200, -2, 2.5]);
+      if (az.prob(0.2)) d.codigo_error = az.elegir([null, 'E_PRUEBA', 'texto libre', 'E_', 7]);
+      if (az.prob(0.1)) d[az.elegir(['extra', 'nombre', 'detalle'])] = 'x';
+      const r = capturar(() => M6.filaLibro(d));
+      if (!r.ok) { assert.equal(r.codigo, 'E_LIBRO_INVALIDO'); continue; }
+      aceptadas++;
+      const f = r.valor;
+      assert.deepEqual(Object.keys(f).sort(), ['clave', ...M6.CLAVES_LIBRO].sort());
+      for (const c of ['n_filas', 'n_vencidas', 'n_apartadas']) assert.ok(Number.isInteger(f[c]) && f[c] >= 0);
+      assert.ok(f.n_vencidas + f.n_apartadas <= f.n_filas);
+      assert.ok(f.codigo_error === null || /^E_[A-Z0-9_]{2,40}$/.test(f.codigo_error));
+      assert.ok(['ok', 'incidencia', 'error', 'omitida'].includes(f.estado));
+      if (f.estado === 'error' || f.estado === 'incidencia') assert.notEqual(f.codigo_error, null);
+      if (f.estado === 'ok') assert.equal(f.codigo_error, null);
+    }
+    assert.ok(aceptadas > 300, 'aceptadas: ' + aceptadas);
+  }
+});
+
+/* ---------------------------------------------------------- estadoBloqueo */
+
+test('sin fila de bloqueo, está libre', () => {
+  assert.equal(M6.estadoBloqueo(null, '2026-10-05T11:00:00Z'), 'libre');
+  assert.equal(M6.estadoBloqueo(undefined, '2026-10-05T11:00:00Z'), 'libre');
+});
+
+test('con caducidad futura está ocupado; con caducidad pasada o justo ahora, vencido', () => {
+  const ahora = '2026-10-05T11:00:00Z';
+  assert.equal(M6.estadoBloqueo({ expira_utc: '2026-10-05T11:30:00Z' }, ahora), 'ocupado');
+  assert.equal(M6.estadoBloqueo({ expira_utc: '2026-10-05T11:00:01Z' }, ahora), 'ocupado');
+  assert.equal(M6.estadoBloqueo({ expira_utc: '2026-10-05T11:00:00Z' }, ahora), 'vencido');
+  assert.equal(M6.estadoBloqueo({ expira_utc: '2026-10-05T10:59:59Z' }, ahora), 'vencido');
+  assert.equal(M6.estadoBloqueo({ expira_utc: '2026-10-04T23:00:00Z' }, ahora), 'vencido');
+});
+
+test('las milésimas se comparan bien aunque un instante las traiga y el otro no', () => {
+  // 11:00:00.500 es POSTERIOR a 11:00:00; como texto crudo se ordenarían al revés
+  assert.equal(M6.estadoBloqueo({ expira_utc: '2026-10-05T11:00:00Z' }, '2026-10-05T11:00:00.500Z'), 'vencido');
+  assert.equal(M6.estadoBloqueo({ expira_utc: '2026-10-05T11:00:00.500Z' }, '2026-10-05T11:00:00Z'), 'ocupado');
+  assert.equal(M6.estadoBloqueo({ expira_utc: '2026-10-05T11:00:00.5Z' }, '2026-10-05T11:00:00.500Z'), 'vencido');
+  assert.equal(M6.estadoBloqueo({ expira_utc: '2026-10-05T11:00:00.51Z' }, '2026-10-05T11:00:00.5Z'), 'ocupado');
+  assert.equal(M6.estadoBloqueo({ expira_utc: '2026-10-05T11:00:00.001Z' }, '2026-10-05T11:00:00Z'), 'ocupado');
+});
+
+test('propiedad: el orden por texto canónico coincide con el orden real de los instantes', () => {
+  const az = azar.crear(404);
+  const fmt = (ms, forma) => {
+    const iso = new Date(ms).toISOString(); // 2026-10-05T11:00:00.500Z
+    if (forma === 0) return iso;
+    const sinMs = iso.replace(/\.\d{3}Z$/, 'Z');
+    if (forma === 1) return ms % 1000 === 0 ? sinMs : iso;
+    const m = /\.(\d{3})Z$/.exec(iso)[1].replace(/0+$/, '');
+    return m === '' ? sinMs : iso.replace(/\.\d{3}Z$/, '.' + m + 'Z');
+  };
+  const inicio = Date.UTC(2026, 0, 1);
+  for (let i = 0; i < 6000; i++) {
+    const a = inicio + az.entero(0, 3000) * (az.prob(0.5) ? 500 : 1000);
+    const b = az.prob(0.3) ? a : inicio + az.entero(0, 3000) * (az.prob(0.5) ? 500 : 1000);
+    const esperado = a > b ? 'ocupado' : 'vencido';
+    assert.equal(M6.estadoBloqueo({ expira_utc: fmt(a, az.entero(0, 2)) }, fmt(b, az.entero(0, 2))), esperado, a + ' vs ' + b);
+  }
+});
+
+test('un bloqueo o un instante mal formados fallan con código, no se interpretan', () => {
+  const ahora = '2026-10-05T11:00:00Z';
+  for (const f of [{ expira_utc: 'mañana' }, { expira_utc: null }, {}, 'x', 5, [], { expira_utc: '2026-10-05 11:30:00' }, { expira_utc: '2026-10-05T25:00:00Z' }]) {
+    assert.equal(codigo(() => M6.estadoBloqueo(f, ahora)), 'E_BLOQUEO_INVALIDO', JSON.stringify(f));
+  }
+  for (const a of [undefined, null, '', 'ahora', 5, '2026-10-05', '2026-10-05T11:00:00']) {
+    assert.equal(codigo(() => M6.estadoBloqueo({ expira_utc: '2026-10-05T11:30:00Z' }, a)), 'E_BLOQUEO_INVALIDO', JSON.stringify(a));
+    assert.equal(codigo(() => M6.estadoBloqueo(null, a)), null); // sin fila, el instante no se mira
+  }
+});
+
+/* ------------------------------------------------------ decidirEjecucion */
+
+test('tabla de decisión completa', () => {
+  const t = [
+    [true, 'libre', 'omitir_ya_procesado'], [true, 'ocupado', 'omitir_ya_procesado'], [true, 'vencido', 'omitir_ya_procesado'],
+    [false, 'libre', 'procesar'], [false, 'ocupado', 'omitir_en_curso'], [false, 'vencido', 'alertar_bloqueo_vencido']
+  ];
+  for (const [ok, bloqueo, esperado] of t) {
+    assert.equal(M6.decidirEjecucion({ ya_resuelto: ok, bloqueo }), esperado, ok + ' + ' + bloqueo);
+  }
+});
+
+test('«procesar» es la única decisión que permite trabajar, y solo con libro sin fila «ok» y bloqueo libre', () => {
+  const decisiones = new Set();
+  for (const ok of [true, false]) for (const b of ['libre', 'ocupado', 'vencido']) {
+    const d = M6.decidirEjecucion({ ya_resuelto: ok, bloqueo: b });
+    decisiones.add(d);
+    if (d === 'procesar') assert.deepEqual([ok, b], [false, 'libre']);
+  }
+  assert.deepEqual([...decisiones].sort(), ['alertar_bloqueo_vencido', 'omitir_en_curso', 'omitir_ya_procesado', 'procesar']);
+});
+
+test('una decisión con datos raros falla con código, no elige por su cuenta', () => {
+  for (const e of [null, undefined, {}, { ya_resuelto: 'true', bloqueo: 'libre' }, { ya_resuelto: 1, bloqueo: 'libre' }, { ya_resuelto: false, bloqueo: 'LIBRE' },
+    { ya_resuelto: false }, { bloqueo: 'libre' }, { ya_resuelto: false, bloqueo: null }, 'x', 5]) {
+    assert.equal(codigo(() => M6.decidirEjecucion(e)), 'E_DECISION_INVALIDA', JSON.stringify(e));
+  }
+});
+
+/* ---------------------------------------------- flujo de idempotencia entero */
+
+test('escenario: dos ejecuciones seguidas con el mismo archivo procesan una sola vez', () => {
+  const libro = [];
+  const bloqueos = new Map();
+  const correr = (cliente, fecha, huella, ahora) => {
+    const clave = M6.claveEjecucion(cliente, fecha, huella);
+    const decision = M6.decidirEjecucion({
+      ya_resuelto: libro.some((f) => f.clave === clave && f.estado === 'ok'),
+      bloqueo: M6.estadoBloqueo(bloqueos.get(cliente) || null, ahora)
+    });
+    if (decision !== 'procesar') return decision;
+    bloqueos.set(cliente, { expira_utc: '2026-10-05T11:30:00Z' });
+    libro.push(M6.filaLibro({ ...FILA(), cliente_id: cliente, semana_iso: Util.semanaISO(fecha), hash_archivo: huella }));
+    bloqueos.delete(cliente);
+    return decision;
+  };
+  assert.equal(correr('demo-01', '2026-10-05', HUELLA, '2026-10-05T11:00:00Z'), 'procesar');
+  assert.equal(correr('demo-01', '2026-10-05', HUELLA, '2026-10-05T11:05:00Z'), 'omitir_ya_procesado');
+  assert.equal(correr('demo-01', '2026-10-06', HUELLA, '2026-10-06T11:00:00Z'), 'omitir_ya_procesado'); // recuperación diaria, mismo archivo y semana
+  assert.equal(correr('demo-01', '2026-10-06', OTRA_HUELLA, '2026-10-06T11:00:00Z'), 'procesar'); // archivo nuevo
+  assert.equal(correr('demo-01', '2026-10-12', HUELLA, '2026-10-12T11:00:00Z'), 'procesar'); // semana siguiente
+  assert.equal(correr('demo-02', '2026-10-05', HUELLA, '2026-10-05T11:00:00Z'), 'procesar'); // otro cliente
+});
+
+test('escenario: una ejecución caída deja un bloqueo vencido y el sistema avisa en vez de reintentar solo', () => {
+  const bloqueo = { expira_utc: '2026-10-05T11:30:00Z' };
+  assert.equal(M6.decidirEjecucion({ ya_resuelto: false, bloqueo: M6.estadoBloqueo(bloqueo, '2026-10-05T11:10:00Z') }), 'omitir_en_curso');
+  assert.equal(M6.decidirEjecucion({ ya_resuelto: false, bloqueo: M6.estadoBloqueo(bloqueo, '2026-10-05T12:00:00Z') }), 'alertar_bloqueo_vencido');
+});
+
+test('no modifica sus argumentos', () => {
+  const d = Object.freeze(FILA());
+  const antes = JSON.stringify(d);
+  M6.filaLibro(d);
+  const f = Object.freeze({ expira_utc: '2026-10-05T11:30:00Z' });
+  M6.estadoBloqueo(f, '2026-10-05T11:00:00Z');
+  const c = Object.freeze({ cliente_id: 'demo-01' });
+  M6.sanearError(new Error('x'), c);
+  assert.equal(JSON.stringify(d), antes);
+});
+
+/* --------------------------------------------------------- bloqueoVigente */
+
+const BLOQUEO = (extra = {}) => ({ cliente_id: 'demo-01', expira_utc: '2026-10-05T11:30:00Z', ...extra });
+
+test('bloqueoVigente: sin filas no hay bloqueo; con una, esa; con varias, la de caducidad más lejana', () => {
+  assert.equal(M6.bloqueoVigente([], 'demo-01'), null);
+  assert.deepEqual(plano(M6.bloqueoVigente([BLOQUEO()], 'demo-01')), BLOQUEO());
+  const r = plano(M6.bloqueoVigente([
+    BLOQUEO({ expira_utc: '2026-10-05T11:10:00Z' }), BLOQUEO({ expira_utc: '2026-10-05T12:00:00Z' }), BLOQUEO({ expira_utc: '2026-10-05T11:59:59Z' })
+  ], 'demo-01'));
+  assert.equal(r.expira_utc, '2026-10-05T12:00:00Z');
+});
+
+test('bloqueoVigente: compara bien las milésimas y el orden de las filas no importa', () => {
+  const a = BLOQUEO({ expira_utc: '2026-10-05T11:00:00Z' });
+  const b = BLOQUEO({ expira_utc: '2026-10-05T11:00:00.500Z' });
+  assert.equal(M6.bloqueoVigente([a, b], 'demo-01').expira_utc, '2026-10-05T11:00:00.500Z');
+  assert.equal(M6.bloqueoVigente([b, a], 'demo-01').expira_utc, '2026-10-05T11:00:00.500Z');
+});
+
+test('bloqueoVigente: de la fila de la tabla solo devuelve las dos columnas que importan', () => {
+  const fila = BLOQUEO({ id: 7, createdAt: '2026-10-05T11:00:00.000Z', updatedAt: '2026-10-05T11:00:00.000Z', extra: 'Juan Pérez' });
+  const r = plano(M6.bloqueoVigente([fila], 'demo-01'));
+  assert.deepEqual(Object.keys(r).sort(), ['cliente_id', 'expira_utc']);
+});
+
+test('bloqueoVigente: una fila ajena, sin caducidad válida o que no es una fila es un defecto y falla con código', () => {
+  for (const f of [BLOQUEO({ cliente_id: 'demo-02' }), BLOQUEO({ cliente_id: undefined }), BLOQUEO({ expira_utc: 'mañana' }), BLOQUEO({ expira_utc: null }), BLOQUEO({ expira_utc: '2026-10-05 11:30:00' }),
+    null, undefined, 'x', 5, [], [BLOQUEO()]]) {
+    assert.equal(codigo(() => M6.bloqueoVigente([f], 'demo-01')), 'E_BLOQUEO_INVALIDO', JSON.stringify(f));
+  }
+  // una sola fila mala entre buenas también detiene: no se adivina cuál vale
+  assert.equal(codigo(() => M6.bloqueoVigente([BLOQUEO(), BLOQUEO({ expira_utc: 'x' })], 'demo-01')), 'E_BLOQUEO_INVALIDO');
+});
+
+test('bloqueoVigente: argumentos inválidos fallan con código (incluido un exceso de filas)', () => {
+  for (const [filas, cliente] of [[undefined, 'demo-01'], [null, 'demo-01'], ['x', 'demo-01'], [{}, 'demo-01'], [[], ''], [[], null], [[], 'con espacio'], [[], undefined],
+    [new Array(51).fill(BLOQUEO()), 'demo-01']]) {
+    assert.equal(codigo(() => M6.bloqueoVigente(filas, cliente)), 'E_BLOQUEO_INVALIDO', JSON.stringify([filas && filas.length, cliente]));
+  }
+  assert.notEqual(M6.bloqueoVigente(new Array(50).fill(BLOQUEO()), 'demo-01'), null);
+});
+
+/* -------------------------------------------------------------- yaResuelto */
+
+const CLAVE = 'demo-01|2026-W41|' + HUELLA;
+const FILA_LIBRO = (estado, extra = {}) => ({ clave: CLAVE, estado, ...extra });
+
+test('yaResuelto: solo «ok» e «incidencia» con esa clave cuentan; «error» y «omitida» se reintentan', () => {
+  assert.equal(M6.yaResuelto([], CLAVE), false);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('ok')], CLAVE), true);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('incidencia')], CLAVE), true);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('error')], CLAVE), false);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('omitida')], CLAVE), false);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('error'), FILA_LIBRO('omitida'), FILA_LIBRO('ok')], CLAVE), true);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('ok'), FILA_LIBRO('error')], CLAVE), true);
+});
+
+test('yaResuelto: el libro del cliente trae todas sus ejecuciones; las de otra semana u otro archivo no cuentan', () => {
+  const otraSemana = { clave: 'demo-01|2026-W40|' + HUELLA, estado: 'ok' };
+  const otroArchivo = { clave: 'demo-01|2026-W41|' + OTRA_HUELLA, estado: 'ok' };
+  const aviso = { clave: 'demo-01|2026-W41|' + '0'.repeat(64), estado: 'incidencia' };
+  assert.equal(M6.yaResuelto([otraSemana, otroArchivo, aviso], CLAVE), false);
+  assert.equal(M6.yaResuelto([otraSemana, otroArchivo, aviso, FILA_LIBRO('ok')], CLAVE), true);
+  assert.equal(M6.yaResuelto([otraSemana, otroArchivo, aviso, FILA_LIBRO('error')], CLAVE), false);
+  // y al revés: para la clave del aviso «no llegó», un informe de la misma semana no la resuelve
+  assert.equal(M6.yaResuelto([FILA_LIBRO('ok'), aviso], 'demo-01|2026-W41|' + '0'.repeat(64)), true);
+  assert.equal(M6.yaResuelto([FILA_LIBRO('ok')], 'demo-01|2026-W41|' + '0'.repeat(64)), false);
+});
+
+test('yaResuelto: ignora las columnas de más de la tabla (id, fechas…) y solo devuelve un booleano', () => {
+  const fila = FILA_LIBRO('ok', { id: 3, createdAt: '2026-10-05T11:00:00.000Z', n_filas: 10, modo: 'dry', codigo_error: null });
+  assert.strictEqual(M6.yaResuelto([fila], CLAVE), true);
+});
+
+test('yaResuelto: una fila de OTRO cliente, sin clave o estado válidos, o que no es una fila, es un defecto y falla con código', () => {
+  const otroCliente = 'demo-02|2026-W41|' + HUELLA;
+  const prefijoParecido = 'demo-01X|2026-W41|' + HUELLA;
+  for (const f of [{ clave: otroCliente, estado: 'ok' }, { clave: prefijoParecido, estado: 'ok' }, { clave: 'demo-0|2026-W41|' + HUELLA, estado: 'ok' }, { clave: 'demo-01', estado: 'ok' },
+    { clave: '|2026-W41|' + HUELLA, estado: 'ok' }, FILA_LIBRO('hecho'), FILA_LIBRO(undefined), FILA_LIBRO('OK'), { estado: 'ok' }, { clave: 5, estado: 'ok' },
+    null, undefined, 'x', 5, [], [FILA_LIBRO('ok')]]) {
+    assert.equal(codigo(() => M6.yaResuelto([f], CLAVE)), 'E_LIBRO_INVALIDO', JSON.stringify(f));
+  }
+  // una sola fila mala entre buenas también detiene: el filtro del flujo está mal y no se adivina
+  assert.equal(codigo(() => M6.yaResuelto([FILA_LIBRO('ok'), { clave: otroCliente, estado: 'ok' }], CLAVE)), 'E_LIBRO_INVALIDO');
+  assert.equal(codigo(() => M6.yaResuelto([{ clave: otroCliente, estado: 'ok' }, FILA_LIBRO('ok')], CLAVE)), 'E_LIBRO_INVALIDO');
+});
+
+test('yaResuelto: la clave y la lista deben ser válidas; demasiadas filas también es un defecto', () => {
+  for (const [filas, clave] of [[undefined, CLAVE], [null, CLAVE], ['x', CLAVE], [{}, CLAVE], [[], undefined], [[], null], [[], 5], [[], ''], [[], 'demo-01|2026-W41|corta'],
+    [[], 'demo-01|2026-W41|' + 'A'.repeat(64)], [[], 'demo 01|2026-W41|' + HUELLA], [[], CLAVE + '\n'], [new Array(1001).fill(FILA_LIBRO('error')), CLAVE]]) {
+    assert.equal(codigo(() => M6.yaResuelto(filas, clave)), 'E_LIBRO_INVALIDO', JSON.stringify([filas && filas.length, clave]));
+  }
+  assert.equal(M6.yaResuelto(new Array(1000).fill(FILA_LIBRO('error')), CLAVE), false);
+});
+
+test('yaResuelto concuerda con las claves y las filas que produce el propio libro', () => {
+  const fila = M6.filaLibro(FILA());
+  const clave = M6.claveEjecucion('demo-01', '2026-10-05', HUELLA);
+  assert.equal(fila.clave, clave);
+  assert.equal(M6.yaResuelto([fila], clave), true);
+  assert.equal(M6.yaResuelto([M6.filaLibro({ ...FILA(), estado: 'error', codigo_error: 'E_DRIVE_LISTAR' })], clave), false);
+});
+
+/* ------------------------------------------------------------- filaBloqueo */
+
+const oraculoBloqueo = (ahora, minutos) => new Date(Date.parse(ahora) + minutos * 60000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+const bloqueo = (ahora, minutos) => plano(M6.filaBloqueo({ cliente_id: 'demo-01', ahora_utc: ahora, ...(minutos === undefined ? {} : { minutos }) }));
+
+test('filaBloqueo: caduca 30 minutos después por defecto', () => {
+  assert.deepEqual(bloqueo('2026-10-05T11:00:00Z'), { cliente_id: 'demo-01', expira_utc: '2026-10-05T11:30:00Z' });
+  assert.equal(M6.MINUTOS_BLOQUEO, 30);
+});
+
+test('filaBloqueo: cruza bien la hora, el día, el mes, el año y el bisiesto', () => {
+  assert.equal(bloqueo('2026-10-05T11:45:10Z').expira_utc, '2026-10-05T12:15:10Z');
+  assert.equal(bloqueo('2026-10-05T23:45:00Z').expira_utc, '2026-10-06T00:15:00Z');
+  assert.equal(bloqueo('2026-10-31T23:59:59Z').expira_utc, '2026-11-01T00:29:59Z');
+  assert.equal(bloqueo('2026-12-31T23:59:59Z').expira_utc, '2027-01-01T00:29:59Z');
+  assert.equal(bloqueo('2028-02-28T23:50:00Z').expira_utc, '2028-02-29T00:20:00Z');
+  assert.equal(bloqueo('2028-02-29T23:50:00Z').expira_utc, '2028-03-01T00:20:00Z');
+  assert.equal(bloqueo('2027-02-28T23:50:00Z').expira_utc, '2027-03-01T00:20:00Z');
+  assert.equal(bloqueo('2026-10-05T23:59:59Z', 240).expira_utc, '2026-10-06T03:59:59Z');
+  assert.equal(bloqueo('2026-10-05T00:00:00Z', 1).expira_utc, '2026-10-05T00:01:00Z');
+});
+
+test('filaBloqueo: descarta las milésimas y conserva los segundos', () => {
+  assert.equal(bloqueo('2026-10-05T11:00:07.999Z').expira_utc, '2026-10-05T11:30:07Z');
+  assert.equal(bloqueo('2026-10-05T11:00:07.5Z').expira_utc, '2026-10-05T11:30:07Z');
+});
+
+test('propiedad: filaBloqueo coincide con el cálculo del reloj del sistema en miles de instantes', () => {
+  const az = azar.crear(808);
+  const inicio = Date.UTC(2026, 0, 1);
+  for (let i = 0; i < 6000; i++) {
+    const ms = inicio + az.entero(0, 400 * 24 * 60) * 60000 + az.entero(0, 59) * 1000;
+    const ahora = new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const minutos = az.prob(0.3) ? 30 : az.entero(1, 240);
+    assert.equal(bloqueo(ahora, minutos).expira_utc, oraculoBloqueo(ahora, minutos), ahora + ' + ' + minutos);
+    if (minutos === 30) assert.equal(bloqueo(ahora).expira_utc, oraculoBloqueo(ahora, 30), ahora + ' (por defecto)');
+  }
+});
+
+test('filaBloqueo: pasar de 2099 queda fuera del rango admitido y falla con código', () => {
+  assert.equal(bloqueo('2099-12-31T23:00:00Z').expira_utc, '2099-12-31T23:30:00Z');
+  assert.equal(codigo(() => M6.filaBloqueo({ cliente_id: 'demo-01', ahora_utc: '2099-12-31T23:59:00Z' })), 'E_BLOQUEO_INVALIDO');
+  assert.equal(bloqueo('2000-01-01T00:00:00Z', 1).expira_utc, '2000-01-01T00:01:00Z');
+});
+
+test('filaBloqueo: entradas inválidas fallan con código', () => {
+  const ok = { cliente_id: 'demo-01', ahora_utc: '2026-10-05T11:00:00Z' };
+  for (const e of [null, undefined, 'x', 5, [], {}, { ...ok, cliente_id: '' }, { ...ok, cliente_id: 'con espacio' }, { ...ok, cliente_id: undefined },
+    { ...ok, ahora_utc: '2026-10-05' }, { ...ok, ahora_utc: '2026-10-05T11:00:00' }, { ...ok, ahora_utc: '2026-10-05T25:00:00Z' }, { ...ok, ahora_utc: '2026-02-30T11:00:00Z' }, { ...ok, ahora_utc: undefined },
+    { ...ok, minutos: 0 }, { ...ok, minutos: 241 }, { ...ok, minutos: -5 }, { ...ok, minutos: 1.5 }, { ...ok, minutos: '30' }, { ...ok, minutos: null }, { ...ok, minutos: NaN }, { ...ok, minutos: Infinity }]) {
+    assert.equal(codigo(() => M6.filaBloqueo(e)), 'E_BLOQUEO_INVALIDO', JSON.stringify(e));
+  }
+});
+
+test('un bloqueo recién tomado está ocupado y, al caducar, vencido; y la fila que produce es la que vigila bloqueoVigente', () => {
+  const ahora = '2026-10-05T11:00:00Z';
+  const fila = plano(M6.filaBloqueo({ cliente_id: 'demo-01', ahora_utc: ahora }));
+  assert.equal(M6.estadoBloqueo(fila, ahora), 'ocupado');
+  assert.equal(M6.estadoBloqueo(fila, '2026-10-05T11:29:59Z'), 'ocupado');
+  assert.equal(M6.estadoBloqueo(fila, '2026-10-05T11:30:00Z'), 'vencido');
+  assert.deepEqual(plano(M6.bloqueoVigente([fila], 'demo-01')), fila);
+});

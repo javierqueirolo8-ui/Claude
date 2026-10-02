@@ -1,0 +1,19 @@
+Nro Factura;Cliente;Saldo;Moneda;Fecha Emisión;Vencimiento;Teléfono;Email;En disputa
+A-1276;Ferretería Ejemplar 04 y Asociados;239.025,25;UYU;09/05/2026;08/06/2026;099 000 005;;
+A-1277;Librería Ejemplar 06;1.274,07;UYU;16/05/2026;30/06/2026;;compras@libreria-ejemplar-06.example;
+A-1278;Panadería Muestra 07 S.R.L.;9.595,11;UYU;21/08/2026;20/10/2026;099 000 006;;
+B-1280;Taller Ilustrativa 01;8.033,54;UYU;22/06/2026;21/08/2026;099 000 010;;
+A-1282;Estudio Imaginaria 05 y Asociados;35.153,78;UYU;02/07/2026;30/09/2026;099 000 002;compras@estudio-imaginaria-05.example;
+A-1285;Ferretería Ejemplar 04 y Asociados;3.187,50;USD;05/06/2026;20/07/2026;099 000 005;;
+A-1286;Estudio Imaginaria 05 y Asociados;869,73;USD;01/07/2026;15/08/2026;099 000 002;compras@estudio-imaginaria-05.example;
+B-1288;Panadería Muestra 07 S.R.L.;950,42;UYU;08/08/2026;07/09/2026;099 000 006;;
+A-1290;Panadería Muestra 07 S.R.L.;704.610,09;UYU;03/06/2026;02/08/2026;099 000 006;;
+A-1293;Panadería Muestra 07 S.R.L.;6.329,09;UYU;26/08/2026;25/09/2026;099 000 006;;
+A-1295;Estudio Imaginaria 05 y Asociados;515.779,70;UYU;13/08/2026;27/09/2026;099 000 002;compras@estudio-imaginaria-05.example;
+B-1296;Librería Ejemplar 06;332.909,67;UYU;03/06/2026;18/07/2026;;compras@libreria-ejemplar-06.example;
+A-1298;Mueblería Inventada 03 S.A.;278.059,40;UYU;27/06/2026;27/07/2026;099 000 006;;
+B-1300;Mueblería Imaginaria 02 S.R.L.;87.662,65;UYU;14/06/2026;12/09/2026;099 000 008;;SI
+A-1303;Panadería Muestra 07 S.R.L.;375.264,24;UYU;09/08/2026;08/10/2026;099 000 006;;
+A-1304;Mueblería Inventada 03 S.A.;432.300,29;UYU;14/07/2026;12/09/2026;099 000 006;;
+A-1307;Ferretería Ejemplar 04 y Asociados;335.876,63;UYU;11/06/2026;10/08/2026;099 000 005;;
+A-1310;Librería Ejemplar 06;143.939,49;UYU;01/08/2026;15/09/2026;;compras@libreria-ejemplar-06.example;

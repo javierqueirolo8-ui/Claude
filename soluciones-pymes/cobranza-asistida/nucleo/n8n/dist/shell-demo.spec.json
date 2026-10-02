@@ -1,0 +1,892 @@
+{
+  "nodos": [
+    {
+      "nombre": "Disparador manual",
+      "tipo": "trigger",
+      "onError": null
+    },
+    {
+      "nombre": "DEV · Entrada",
+      "tipo": "code",
+      "onError": null,
+      "codigo": "// Solo para el banco de pruebas: la configuración del cliente ficticio y el reloj llegan en el pedido de la prueba.\n// En producción la configuración la fija Javier en este nodo y el reloj es el del servidor.\nconst pedido = $input.first().json || {};\nconst base = {\"cliente_id\":\"demo-01\",\"empresa\":{\"nombre\":\"Ferretería Ficticia S.R.L.\",\"medios_pago\":\"Pueden abonarla por transferencia a la cuenta ficticia 000-000000-0.\",\"firma\":\"Administración\\nFerretería Ficticia S.R.L.\"},\"destinatarios_permitidos\":[\"administracion@ferreteria-ficticia.example\"],\"remitente_prueba\":\"bandeja.de.pruebas@ejemplo.example\",\"entrega\":\"enlace_salida\",\"modo\":\"dry_run\",\"zona_horaria\":\"America/Montevideo\",\"patron_nombre_archivo\":\"*\",\"antiguedad_maxima_archivo_dias\":8,\"umbral_rechazo\":20,\"ignorar_filas_de_total\":true,\"formato_importe\":{\"decimal\":\",\",\"miles\":\".\"},\"monedas_admitidas\":[\"UYU\",\"USD\"],\"mapeo_columnas\":{\"factura\":[\"Nro Factura\"],\"deudor\":[\"Cliente\"],\"importe\":[\"Saldo\"],\"moneda\":[\"Moneda\"],\"emision\":[\"Fecha Emisión\"],\"vencimiento\":[\"Vencimiento\"],\"telefono\":[\"Teléfono\"],\"correo\":[\"Email\"],\"en_disputa\":[\"En disputa\"]}};\nconst config = Object.assign({}, base, pedido.config || {});\nconst ahora = typeof pedido.ahora_utc === 'string' ? pedido.ahora_utc : new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z');\nreturn [{ json: {\n  config: config,\n  ahora_utc: ahora,\n  fallos: Array.isArray(pedido.fallos) ? pedido.fallos : [],\n  operador: typeof pedido.operador === 'string' ? pedido.operador : 'javier@ejemplo.example',\n  workflow: $workflow.name,\n  ejecucion_id: String($execution.id)\n} }];\n"
+    },
+    {
+      "nombre": "Leer interruptor general",
+      "tipo": "dtGet",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "Leer bloqueos del cliente",
+      "tipo": "dtGet",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "Preparar inicio",
+      "tipo": "code",
+      "onError": "continueErrorOutput",
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nconst filas = function (nodo) { return $(nodo).all(0).map(function (i) { return i.json; }).filter(function (j) { return j.id !== undefined; }); };\nreturn [{ json: { op: 'iniciar', entrada: { config: ctx.config, filas_control: filas('Leer interruptor general'), filas_bloqueo: filas('Leer bloqueos del cliente'), ahora_utc: ctx.ahora_utc } } }];\n"
+    },
+    {
+      "nombre": "Núcleo · iniciar",
+      "tipo": "exec",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "¿Cómo sigue el día?",
+      "tipo": "switch",
+      "onError": null
+    },
+    {
+      "nombre": "Escribir bloqueo",
+      "tipo": "dtInsert",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "Leer libro del cliente",
+      "tipo": "dtGet",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "Drive · leer carpeta (simulado)",
+      "tipo": "dtGet",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "Preparar elección de archivo",
+      "tipo": "code",
+      "onError": "continueErrorOutput",
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nif (ctx.fallos.indexOf('listar') >= 0) throw new Error('E_DRIVE_LISTAR');\nconst ini = $(\"Núcleo · iniciar\").first(0).json.resultado;\nconst archivos = $('Drive · leer carpeta (simulado)').all(0).map(function (i) { return i.json; }).filter(function (j) { return j.id !== undefined; }).map(function (f) {\n  return { id: f.archivo_id, name: f.nombre, mimeType: f.mime_type, size: f.tamano, modifiedTime: f.modificado };\n});\nreturn [{ json: { op: 'elegir_archivo', entrada: { config: ctx.config, archivos: archivos, fecha_corte: ini.fecha_corte } } }];\n"
+    },
+    {
+      "nombre": "Núcleo · elegir archivo",
+      "tipo": "exec",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "¿Qué hay en la carpeta?",
+      "tipo": "switch",
+      "onError": null
+    },
+    {
+      "nombre": "Drive · descargar (simulado)",
+      "tipo": "code",
+      "onError": "continueErrorOutput",
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nif (ctx.fallos.indexOf('descargar') >= 0) throw new Error('E_DRIVE_DESCARGAR');\nconst elegido = $(\"Núcleo · elegir archivo\").first(0).json.resultado.archivo;\nconst filas = $('Drive · leer carpeta (simulado)').all(0).map(function (i) { return i.json; }).filter(function (j) { return j.id !== undefined; }).filter(function (f) { return f.archivo_id === elegido.id; });\nif (filas.length !== 1) throw new Error('E_DRIVE_DESCARGAR');\nconst f = filas[0];\nlet texto = '';\nlet paraHuella = '';\nlet recibido = 0;\nlet filasXlsx = null;\nif (elegido.formato === 'xlsx') {\n  // una hoja de cálculo llega ya leída (filas); su tamaño original no se puede medir aquí: se da por entero\n  paraHuella = String(f.contenido || '');\n  filasXlsx = JSON.parse(String(f.filas_json || '[]'));\n  recibido = elegido.bytes;\n} else {\n  const completo = String(f.contenido || '');\n  const bytes = Buffer.from(completo, 'utf8');\n  const corte = typeof f.corte_bytes === 'number' && f.corte_bytes >= 0 && f.corte_bytes < bytes.length ? f.corte_bytes : null;\n  texto = corte !== null ? bytes.subarray(0, corte).toString('utf8') : completo;\n  paraHuella = texto;\n  recibido = corte !== null ? corte : bytes.length;\n}\nreturn [{ json: { formato: elegido.formato, texto: texto, filas: filasXlsx, para_huella: paraHuella, recibido_bytes: recibido } }];\n"
+    },
+    {
+      "nombre": "Huella SHA-256",
+      "tipo": "crypto",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "Preparar decisión",
+      "tipo": "code",
+      "onError": "continueErrorOutput",
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nconst elegido = $(\"Núcleo · elegir archivo\").first(0).json.resultado.archivo;\nconst descarga = $(\"Drive · descargar (simulado)\").first(0).json;\nconst hash = $(\"Huella SHA-256\").first(0).json.hash;\nreturn [{ json: { op: 'decidir_procesado', entrada: {\n  cliente_id: ctx.config.cliente_id, fecha_exportacion: elegido.modificado_fecha, hash_archivo: hash,\n  esperado_bytes: elegido.bytes, recibido_bytes: descarga.recibido_bytes, filas_libro: $('Leer libro del cliente').all(0).map(function (i) { return i.json; }).filter(function (j) { return j.id !== undefined; })\n} } }];\n"
+    },
+    {
+      "nombre": "Núcleo · decidir procesado",
+      "tipo": "exec",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "¿Procesar este archivo?",
+      "tipo": "switch",
+      "onError": null
+    },
+    {
+      "nombre": "Preparar informe",
+      "tipo": "code",
+      "onError": "continueErrorOutput",
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nconst ini = $(\"Núcleo · iniciar\").first(0).json.resultado;\nconst descarga = $(\"Drive · descargar (simulado)\").first(0).json;\nconst contenido = descarga.formato === 'xlsx' ? { formato: 'filas', filas: descarga.filas } : { formato: 'csv', texto: descarga.texto };\nreturn [{ json: { op: 'preparar', entrada: { config: ctx.config, guardias: { permitido: ini.guardias.permitido, dry_run: ini.guardias.dry_run }, fecha_corte: ini.fecha_corte, contenido: contenido } } }];\n"
+    },
+    {
+      "nombre": "Núcleo · preparar",
+      "tipo": "exec",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "¿Cómo se entrega?",
+      "tipo": "switch",
+      "onError": null
+    },
+    {
+      "nombre": "Preparar subida del informe",
+      "tipo": "code",
+      "onError": "continueErrorOutput",
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nif (ctx.fallos.indexOf('subir') >= 0) throw new Error('E_DRIVE_SUBIR');\nconst informe = $(\"Núcleo · preparar\").first(0).json.resultado.informe;\nconst id = 'InformeSim' + ctx.config.cliente_id.replace(/[^A-Za-z0-9]/g, '') + ctx.ejecucion_id;\nreturn [{ json: { cliente_id: ctx.config.cliente_id, archivo_id: id, nombre: informe.nombre_archivo, contenido: informe.html_completo, creado_utc: ctx.ahora_utc } }];\n"
+    },
+    {
+      "nombre": "Drive · subir informe (simulado)",
+      "tipo": "dtInsert",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "Preparar armado del envío",
+      "tipo": "code",
+      "onError": "continueErrorOutput",
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nconst ini = $(\"Núcleo · iniciar\").first(0).json.resultado;\nconst elegido = $(\"Núcleo · elegir archivo\").first(0).json.resultado.archivo;\nconst preparado = $(\"Núcleo · preparar\").first(0).json.resultado;\nconst hash = $(\"Huella SHA-256\").first(0).json.hash;\nlet enlace;\nif ($('Drive · subir informe (simulado)').isExecuted) enlace = 'https://drive.google.com/file/d/' + $('Drive · subir informe (simulado)').first(0).json.archivo_id + '/view';\nreturn [{ json: { op: 'armar_envio', entrada: {\n  config: ctx.config, guardias: { permitido: ini.guardias.permitido, dry_run: ini.guardias.dry_run }, fecha_corte: ini.fecha_corte, fecha_exportacion: elegido.modificado_fecha, tipo: preparado.tipo,\n  preparado: preparado, enlace_informe: enlace, hash_archivo: hash, iniciada_utc: ctx.ahora_utc, terminada_utc: ctx.ahora_utc\n} } }];\n"
+    },
+    {
+      "nombre": "Núcleo · armar envío",
+      "tipo": "exec",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "¿Envío armado?",
+      "tipo": "if",
+      "onError": null
+    },
+    {
+      "nombre": "Preparar correo",
+      "tipo": "code",
+      "onError": "continueErrorOutput",
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nif (ctx.fallos.indexOf('enviar') >= 0) throw new Error('E_CORREO_ENVIAR');\nconst r = $(\"Núcleo · armar envío\").first(0).json.resultado;\nconst adjunto = r.correo.adjunto;\nreturn r.envio.destinatarios.map(function (para) {\n  return { json: {\n    tipo: 'dueno', cliente_id: ctx.config.cliente_id, para: para, asunto: r.correo.asunto, cuerpo_texto: r.correo.cuerpo_texto,\n    adjunto_nombre: adjunto ? adjunto.nombre : '', adjunto_bytes: adjunto ? Buffer.byteLength(adjunto.contenido, 'utf8') : 0, creado_utc: ctx.ahora_utc\n  } };\n});\n"
+    },
+    {
+      "nombre": "Correo · enviar (simulado)",
+      "tipo": "dtInsert",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "Preparar libro",
+      "tipo": "code",
+      "onError": "continueErrorOutput",
+      "codigo": "return [{ json: $(\"Núcleo · armar envío\").first(0).json.resultado.libro }];\n"
+    },
+    {
+      "nombre": "Escribir libro",
+      "tipo": "dtInsert",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "Soltar bloqueo",
+      "tipo": "dtDelete",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "Fin · envío",
+      "tipo": "code",
+      "onError": null,
+      "codigo": "const ini = $(\"Núcleo · iniciar\").first(0).json.resultado;\nconst r = $(\"Núcleo · armar envío\").first(0).json.resultado;\nconst libro = r.libro;\nlet estado = 'incidencia_enviada';\nif (libro.codigo_error === 'E_SIN_ARCHIVO') estado = 'aviso_sin_archivo';\nelse if (libro.estado === 'ok') estado = 'informe_enviado';\nconst salida = { estado: estado, fecha_corte: ini.fecha_corte, envio: r.envio.accion };\nif (estado !== 'aviso_sin_archivo') salida.hash = libro.hash_archivo;\nreturn [{ json: salida }];\n"
+    },
+    {
+      "nombre": "Preparar aviso de «no llegó»",
+      "tipo": "code",
+      "onError": "continueErrorOutput",
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nconst ini = $(\"Núcleo · iniciar\").first(0).json.resultado;\nreturn [{ json: { op: 'decidir_aviso', entrada: { config: ctx.config, fecha_corte: ini.fecha_corte, filas_libro: $('Leer libro del cliente').all(0).map(function (i) { return i.json; }).filter(function (j) { return j.id !== undefined; }) } } }];\n"
+    },
+    {
+      "nombre": "Núcleo · decidir aviso",
+      "tipo": "exec",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "¿Avisar?",
+      "tipo": "switch",
+      "onError": null
+    },
+    {
+      "nombre": "Preparar armado del aviso",
+      "tipo": "code",
+      "onError": "continueErrorOutput",
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nconst ini = $(\"Núcleo · iniciar\").first(0).json.resultado;\nreturn [{ json: { op: 'armar_envio', entrada: {\n  config: ctx.config, guardias: { permitido: ini.guardias.permitido, dry_run: ini.guardias.dry_run }, fecha_corte: ini.fecha_corte, tipo: 'sin_archivo', iniciada_utc: ctx.ahora_utc, terminada_utc: ctx.ahora_utc\n} } }];\n"
+    },
+    {
+      "nombre": "Soltar bloqueo (sin envío)",
+      "tipo": "dtDelete",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "nombre": "Fin · sin envío",
+      "tipo": "code",
+      "onError": null,
+      "codigo": "const ini = $(\"Núcleo · iniciar\").first(0).json.resultado;\nconst estado = $('Núcleo · decidir procesado').isExecuted ? 'ya_procesado' : 'sin_archivo_' + $(\"Núcleo · decidir aviso\").first(0).json.resultado.decision;\nreturn [{ json: { estado: estado, fecha_corte: ini.fecha_corte } }];\n"
+    },
+    {
+      "nombre": "Fin · sin trabajo",
+      "tipo": "code",
+      "onError": null,
+      "codigo": "const r = $(\"Núcleo · iniciar\").first(0).json.resultado;\nreturn [{ json: r.accion === 'omitir_en_curso' ? { estado: 'omitida_en_curso', fecha_corte: r.fecha_corte } : { estado: 'detenida', motivo: r.motivo, fecha_corte: r.fecha_corte } }];\n"
+    },
+    {
+      "nombre": "Preparar aviso sin libro",
+      "tipo": "code",
+      "onError": "continueErrorOutput",
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nconst r = $(\"Núcleo · iniciar\").first(0).json.resultado;\nreturn [{ json: { op: 'error', entrada: {\n  codigo: r.codigo,\n  contexto: { cliente_id: ctx.config.cliente_id, workflow: ctx.workflow, nodo: r.accion === 'alertar_bloqueo_vencido' ? 'Bloqueo' : 'Arranque', ejecucion_id: ctx.ejecucion_id },\n  operador: ctx.operador, problemas: r.problemas\n} } }];\n"
+    },
+    {
+      "nombre": "Núcleo · aviso",
+      "tipo": "exec",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "nombre": "¿Hay a quién avisar? (aviso)",
+      "tipo": "if",
+      "onError": null
+    },
+    {
+      "nombre": "Preparar correo de aviso",
+      "tipo": "code",
+      "onError": null,
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nconst a = $(\"Núcleo · aviso\").first(0).json.resultado.alerta;\nconst base = { cliente_id: ctx.config.cliente_id, asunto: a.texto.asunto, cuerpo_texto: a.texto.cuerpo_texto, adjunto_nombre: '', adjunto_bytes: 0, creado_utc: ctx.ahora_utc };\n// con el correo caído el aviso no sale: queda anotado el intento fallido\nif (ctx.fallos.indexOf('enviar') >= 0) return [{ json: Object.assign({ tipo: 'operador_fallido', para: a.envio.destinatarios.join(',') }, base) }];\nreturn a.envio.destinatarios.map(function (para) { return { json: Object.assign({ tipo: 'operador', para: para }, base) }; });\n"
+    },
+    {
+      "nombre": "Correo · avisar a Javier (aviso)",
+      "tipo": "dtInsert",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "nombre": "Fin · aviso",
+      "tipo": "code",
+      "onError": null,
+      "codigo": "const r = $(\"Núcleo · iniciar\").first(0).json.resultado;\nreturn [{ json: r.accion === 'alertar_bloqueo_vencido' ? { estado: 'bloqueo_vencido', fecha_corte: r.fecha_corte } : { estado: 'detenida', motivo: r.motivo, fecha_corte: r.fecha_corte } }];\n"
+    },
+    {
+      "nombre": "Código · tabla (leer)",
+      "tipo": "set",
+      "onError": null
+    },
+    {
+      "nombre": "Código · tabla (escribir)",
+      "tipo": "set",
+      "onError": null
+    },
+    {
+      "nombre": "Código · carpeta (listar)",
+      "tipo": "set",
+      "onError": null
+    },
+    {
+      "nombre": "Código · carpeta (descargar)",
+      "tipo": "set",
+      "onError": null
+    },
+    {
+      "nombre": "Código · carpeta (subir)",
+      "tipo": "set",
+      "onError": null
+    },
+    {
+      "nombre": "Código · correo",
+      "tipo": "set",
+      "onError": null
+    },
+    {
+      "nombre": "Código · huella",
+      "tipo": "set",
+      "onError": null
+    },
+    {
+      "nombre": "Código · núcleo",
+      "tipo": "set",
+      "onError": null
+    },
+    {
+      "nombre": "Código · flujo",
+      "tipo": "set",
+      "onError": null
+    },
+    {
+      "nombre": "Código · archivo ambiguo",
+      "tipo": "set",
+      "onError": null
+    },
+    {
+      "nombre": "Código · resultado del núcleo",
+      "tipo": "set",
+      "onError": null
+    },
+    {
+      "nombre": "Preparar manejo del error",
+      "tipo": "code",
+      "onError": null,
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nconst ini = $('Núcleo · iniciar').isExecuted ? $(\"Núcleo · iniciar\").first(0).json : null;\nconst r = ini && ini.ok ? ini.resultado : null;\nconst hash = $('Huella SHA-256').isExecuted ? $(\"Huella SHA-256\").first(0).json.hash : undefined;\nreturn [{ json: { op: 'error', entrada: {\n  codigo: $json.codigo,\n  contexto: { cliente_id: ctx.config.cliente_id, workflow: ctx.workflow, nodo: $json.nodo, ejecucion_id: ctx.ejecucion_id },\n  operador: ctx.operador, cliente_id: ctx.config.cliente_id, fecha_corte: r ? r.fecha_corte : undefined, hash_archivo: hash,\n  iniciada_utc: ctx.ahora_utc, terminada_utc: ctx.ahora_utc, guardias: r ? r.guardias : null, modo_cliente: ctx.config.modo\n} } }];\n"
+    },
+    {
+      "nombre": "Núcleo · error",
+      "tipo": "exec",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "nombre": "¿Hay fila de libro?",
+      "tipo": "if",
+      "onError": null
+    },
+    {
+      "nombre": "Escribir libro (error)",
+      "tipo": "dtInsert",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "nombre": "Soltar bloqueo (error)",
+      "tipo": "dtDelete",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "nombre": "¿Hay a quién avisar?",
+      "tipo": "if",
+      "onError": null
+    },
+    {
+      "nombre": "Preparar correo al operador",
+      "tipo": "code",
+      "onError": null,
+      "codigo": "const ctx = $(\"DEV · Entrada\").first(0).json;\nconst a = $(\"Núcleo · error\").first(0).json.resultado.alerta;\nconst base = { cliente_id: ctx.config.cliente_id, asunto: a.texto.asunto, cuerpo_texto: a.texto.cuerpo_texto, adjunto_nombre: '', adjunto_bytes: 0, creado_utc: ctx.ahora_utc };\n// con el correo caído el aviso no sale: queda anotado el intento fallido\nif (ctx.fallos.indexOf('enviar') >= 0) return [{ json: Object.assign({ tipo: 'operador_fallido', para: a.envio.destinatarios.join(',') }, base) }];\nreturn a.envio.destinatarios.map(function (para) { return { json: Object.assign({ tipo: 'operador', para: para }, base) }; });\n"
+    },
+    {
+      "nombre": "Correo · avisar a Javier",
+      "tipo": "dtInsert",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "nombre": "Fin · error",
+      "tipo": "code",
+      "onError": null,
+      "codigo": "const r = $(\"Núcleo · error\").first(0).json;\nconst ini = $('Núcleo · iniciar').isExecuted ? $(\"Núcleo · iniciar\").first(0).json : null;\nif (r.ok !== true) throw new Error('E_NUCLEO_FALLO');\nconst sano = r.resultado.alerta.sano;\nreturn [{ json: { estado: 'error', codigo: sano.codigo, nodo: sano.nodo, fecha_corte: ini && ini.ok === true ? ini.resultado.fecha_corte : null } }];\n"
+    }
+  ],
+  "aristas": [
+    {
+      "de": "Disparador manual",
+      "salida": "main",
+      "a": "DEV · Entrada"
+    },
+    {
+      "de": "DEV · Entrada",
+      "salida": "main",
+      "a": "Leer interruptor general"
+    },
+    {
+      "de": "Leer interruptor general",
+      "salida": "main",
+      "a": "Leer bloqueos del cliente"
+    },
+    {
+      "de": "Leer interruptor general",
+      "salida": "error",
+      "a": "Código · tabla (leer)"
+    },
+    {
+      "de": "Leer bloqueos del cliente",
+      "salida": "main",
+      "a": "Preparar inicio"
+    },
+    {
+      "de": "Leer bloqueos del cliente",
+      "salida": "error",
+      "a": "Código · tabla (leer)"
+    },
+    {
+      "de": "Preparar inicio",
+      "salida": "main",
+      "a": "Núcleo · iniciar"
+    },
+    {
+      "de": "Preparar inicio",
+      "salida": "error",
+      "a": "Código · flujo"
+    },
+    {
+      "de": "Núcleo · iniciar",
+      "salida": "main",
+      "a": "¿Cómo sigue el día?"
+    },
+    {
+      "de": "Núcleo · iniciar",
+      "salida": "error",
+      "a": "Código · núcleo"
+    },
+    {
+      "de": "¿Cómo sigue el día?",
+      "salida": "caso 0",
+      "a": "Código · resultado del núcleo"
+    },
+    {
+      "de": "¿Cómo sigue el día?",
+      "salida": "caso 1",
+      "a": "Escribir bloqueo"
+    },
+    {
+      "de": "¿Cómo sigue el día?",
+      "salida": "caso 2",
+      "a": "Código · resultado del núcleo"
+    },
+    {
+      "de": "¿Cómo sigue el día?",
+      "salida": "caso 3",
+      "a": "Preparar aviso sin libro"
+    },
+    {
+      "de": "¿Cómo sigue el día?",
+      "salida": "caso 4",
+      "a": "Fin · sin trabajo"
+    },
+    {
+      "de": "Escribir bloqueo",
+      "salida": "main",
+      "a": "Leer libro del cliente"
+    },
+    {
+      "de": "Escribir bloqueo",
+      "salida": "error",
+      "a": "Código · tabla (escribir)"
+    },
+    {
+      "de": "Leer libro del cliente",
+      "salida": "main",
+      "a": "Drive · leer carpeta (simulado)"
+    },
+    {
+      "de": "Leer libro del cliente",
+      "salida": "error",
+      "a": "Código · tabla (leer)"
+    },
+    {
+      "de": "Drive · leer carpeta (simulado)",
+      "salida": "main",
+      "a": "Preparar elección de archivo"
+    },
+    {
+      "de": "Drive · leer carpeta (simulado)",
+      "salida": "error",
+      "a": "Código · tabla (leer)"
+    },
+    {
+      "de": "Preparar elección de archivo",
+      "salida": "main",
+      "a": "Núcleo · elegir archivo"
+    },
+    {
+      "de": "Preparar elección de archivo",
+      "salida": "error",
+      "a": "Código · carpeta (listar)"
+    },
+    {
+      "de": "Núcleo · elegir archivo",
+      "salida": "main",
+      "a": "¿Qué hay en la carpeta?"
+    },
+    {
+      "de": "Núcleo · elegir archivo",
+      "salida": "error",
+      "a": "Código · núcleo"
+    },
+    {
+      "de": "¿Qué hay en la carpeta?",
+      "salida": "caso 0",
+      "a": "Código · resultado del núcleo"
+    },
+    {
+      "de": "¿Qué hay en la carpeta?",
+      "salida": "caso 1",
+      "a": "Drive · descargar (simulado)"
+    },
+    {
+      "de": "¿Qué hay en la carpeta?",
+      "salida": "caso 2",
+      "a": "Preparar aviso de «no llegó»"
+    },
+    {
+      "de": "¿Qué hay en la carpeta?",
+      "salida": "caso 3",
+      "a": "Código · archivo ambiguo"
+    },
+    {
+      "de": "¿Qué hay en la carpeta?",
+      "salida": "caso 4",
+      "a": "Código · núcleo"
+    },
+    {
+      "de": "Drive · descargar (simulado)",
+      "salida": "main",
+      "a": "Huella SHA-256"
+    },
+    {
+      "de": "Drive · descargar (simulado)",
+      "salida": "error",
+      "a": "Código · carpeta (descargar)"
+    },
+    {
+      "de": "Huella SHA-256",
+      "salida": "main",
+      "a": "Preparar decisión"
+    },
+    {
+      "de": "Huella SHA-256",
+      "salida": "error",
+      "a": "Código · huella"
+    },
+    {
+      "de": "Preparar decisión",
+      "salida": "main",
+      "a": "Núcleo · decidir procesado"
+    },
+    {
+      "de": "Preparar decisión",
+      "salida": "error",
+      "a": "Código · flujo"
+    },
+    {
+      "de": "Núcleo · decidir procesado",
+      "salida": "main",
+      "a": "¿Procesar este archivo?"
+    },
+    {
+      "de": "Núcleo · decidir procesado",
+      "salida": "error",
+      "a": "Código · núcleo"
+    },
+    {
+      "de": "¿Procesar este archivo?",
+      "salida": "caso 0",
+      "a": "Código · resultado del núcleo"
+    },
+    {
+      "de": "¿Procesar este archivo?",
+      "salida": "caso 1",
+      "a": "Preparar informe"
+    },
+    {
+      "de": "¿Procesar este archivo?",
+      "salida": "caso 2",
+      "a": "Soltar bloqueo (sin envío)"
+    },
+    {
+      "de": "¿Procesar este archivo?",
+      "salida": "caso 3",
+      "a": "Código · núcleo"
+    },
+    {
+      "de": "Preparar informe",
+      "salida": "main",
+      "a": "Núcleo · preparar"
+    },
+    {
+      "de": "Preparar informe",
+      "salida": "error",
+      "a": "Código · flujo"
+    },
+    {
+      "de": "Núcleo · preparar",
+      "salida": "main",
+      "a": "¿Cómo se entrega?"
+    },
+    {
+      "de": "Núcleo · preparar",
+      "salida": "error",
+      "a": "Código · núcleo"
+    },
+    {
+      "de": "¿Cómo se entrega?",
+      "salida": "caso 0",
+      "a": "Código · resultado del núcleo"
+    },
+    {
+      "de": "¿Cómo se entrega?",
+      "salida": "caso 1",
+      "a": "Preparar subida del informe"
+    },
+    {
+      "de": "¿Cómo se entrega?",
+      "salida": "caso 2",
+      "a": "Preparar armado del envío"
+    },
+    {
+      "de": "Preparar subida del informe",
+      "salida": "main",
+      "a": "Drive · subir informe (simulado)"
+    },
+    {
+      "de": "Preparar subida del informe",
+      "salida": "error",
+      "a": "Código · carpeta (subir)"
+    },
+    {
+      "de": "Drive · subir informe (simulado)",
+      "salida": "main",
+      "a": "Preparar armado del envío"
+    },
+    {
+      "de": "Drive · subir informe (simulado)",
+      "salida": "error",
+      "a": "Código · carpeta (subir)"
+    },
+    {
+      "de": "Preparar armado del envío",
+      "salida": "main",
+      "a": "Núcleo · armar envío"
+    },
+    {
+      "de": "Preparar armado del envío",
+      "salida": "error",
+      "a": "Código · flujo"
+    },
+    {
+      "de": "Núcleo · armar envío",
+      "salida": "main",
+      "a": "¿Envío armado?"
+    },
+    {
+      "de": "Núcleo · armar envío",
+      "salida": "error",
+      "a": "Código · núcleo"
+    },
+    {
+      "de": "¿Envío armado?",
+      "salida": "true",
+      "a": "Preparar correo"
+    },
+    {
+      "de": "¿Envío armado?",
+      "salida": "false",
+      "a": "Código · resultado del núcleo"
+    },
+    {
+      "de": "Preparar correo",
+      "salida": "main",
+      "a": "Correo · enviar (simulado)"
+    },
+    {
+      "de": "Preparar correo",
+      "salida": "error",
+      "a": "Código · correo"
+    },
+    {
+      "de": "Correo · enviar (simulado)",
+      "salida": "main",
+      "a": "Preparar libro"
+    },
+    {
+      "de": "Correo · enviar (simulado)",
+      "salida": "error",
+      "a": "Código · correo"
+    },
+    {
+      "de": "Preparar libro",
+      "salida": "main",
+      "a": "Escribir libro"
+    },
+    {
+      "de": "Preparar libro",
+      "salida": "error",
+      "a": "Código · flujo"
+    },
+    {
+      "de": "Escribir libro",
+      "salida": "main",
+      "a": "Soltar bloqueo"
+    },
+    {
+      "de": "Escribir libro",
+      "salida": "error",
+      "a": "Código · tabla (escribir)"
+    },
+    {
+      "de": "Soltar bloqueo",
+      "salida": "main",
+      "a": "Fin · envío"
+    },
+    {
+      "de": "Soltar bloqueo",
+      "salida": "error",
+      "a": "Código · tabla (escribir)"
+    },
+    {
+      "de": "Preparar aviso de «no llegó»",
+      "salida": "main",
+      "a": "Núcleo · decidir aviso"
+    },
+    {
+      "de": "Preparar aviso de «no llegó»",
+      "salida": "error",
+      "a": "Código · flujo"
+    },
+    {
+      "de": "Núcleo · decidir aviso",
+      "salida": "main",
+      "a": "¿Avisar?"
+    },
+    {
+      "de": "Núcleo · decidir aviso",
+      "salida": "error",
+      "a": "Código · núcleo"
+    },
+    {
+      "de": "¿Avisar?",
+      "salida": "caso 0",
+      "a": "Código · resultado del núcleo"
+    },
+    {
+      "de": "¿Avisar?",
+      "salida": "caso 1",
+      "a": "Preparar armado del aviso"
+    },
+    {
+      "de": "¿Avisar?",
+      "salida": "caso 2",
+      "a": "Soltar bloqueo (sin envío)"
+    },
+    {
+      "de": "Preparar armado del aviso",
+      "salida": "main",
+      "a": "Núcleo · armar envío"
+    },
+    {
+      "de": "Preparar armado del aviso",
+      "salida": "error",
+      "a": "Código · flujo"
+    },
+    {
+      "de": "Soltar bloqueo (sin envío)",
+      "salida": "main",
+      "a": "Fin · sin envío"
+    },
+    {
+      "de": "Soltar bloqueo (sin envío)",
+      "salida": "error",
+      "a": "Código · tabla (escribir)"
+    },
+    {
+      "de": "Preparar aviso sin libro",
+      "salida": "main",
+      "a": "Núcleo · aviso"
+    },
+    {
+      "de": "Preparar aviso sin libro",
+      "salida": "error",
+      "a": "Código · flujo"
+    },
+    {
+      "de": "Núcleo · aviso",
+      "salida": "main",
+      "a": "¿Hay a quién avisar? (aviso)"
+    },
+    {
+      "de": "¿Hay a quién avisar? (aviso)",
+      "salida": "true",
+      "a": "Preparar correo de aviso"
+    },
+    {
+      "de": "¿Hay a quién avisar? (aviso)",
+      "salida": "false",
+      "a": "Fin · aviso"
+    },
+    {
+      "de": "Preparar correo de aviso",
+      "salida": "main",
+      "a": "Correo · avisar a Javier (aviso)"
+    },
+    {
+      "de": "Correo · avisar a Javier (aviso)",
+      "salida": "main",
+      "a": "Fin · aviso"
+    },
+    {
+      "de": "Código · tabla (leer)",
+      "salida": "main",
+      "a": "Preparar manejo del error"
+    },
+    {
+      "de": "Código · tabla (escribir)",
+      "salida": "main",
+      "a": "Preparar manejo del error"
+    },
+    {
+      "de": "Código · carpeta (listar)",
+      "salida": "main",
+      "a": "Preparar manejo del error"
+    },
+    {
+      "de": "Código · carpeta (descargar)",
+      "salida": "main",
+      "a": "Preparar manejo del error"
+    },
+    {
+      "de": "Código · carpeta (subir)",
+      "salida": "main",
+      "a": "Preparar manejo del error"
+    },
+    {
+      "de": "Código · correo",
+      "salida": "main",
+      "a": "Preparar manejo del error"
+    },
+    {
+      "de": "Código · huella",
+      "salida": "main",
+      "a": "Preparar manejo del error"
+    },
+    {
+      "de": "Código · núcleo",
+      "salida": "main",
+      "a": "Preparar manejo del error"
+    },
+    {
+      "de": "Código · flujo",
+      "salida": "main",
+      "a": "Preparar manejo del error"
+    },
+    {
+      "de": "Código · archivo ambiguo",
+      "salida": "main",
+      "a": "Preparar manejo del error"
+    },
+    {
+      "de": "Código · resultado del núcleo",
+      "salida": "main",
+      "a": "Preparar manejo del error"
+    },
+    {
+      "de": "Preparar manejo del error",
+      "salida": "main",
+      "a": "Núcleo · error"
+    },
+    {
+      "de": "Núcleo · error",
+      "salida": "main",
+      "a": "¿Hay fila de libro?"
+    },
+    {
+      "de": "¿Hay fila de libro?",
+      "salida": "true",
+      "a": "Escribir libro (error)"
+    },
+    {
+      "de": "¿Hay fila de libro?",
+      "salida": "false",
+      "a": "Soltar bloqueo (error)"
+    },
+    {
+      "de": "Escribir libro (error)",
+      "salida": "main",
+      "a": "Soltar bloqueo (error)"
+    },
+    {
+      "de": "Soltar bloqueo (error)",
+      "salida": "main",
+      "a": "¿Hay a quién avisar?"
+    },
+    {
+      "de": "¿Hay a quién avisar?",
+      "salida": "true",
+      "a": "Preparar correo al operador"
+    },
+    {
+      "de": "¿Hay a quién avisar?",
+      "salida": "false",
+      "a": "Fin · error"
+    },
+    {
+      "de": "Preparar correo al operador",
+      "salida": "main",
+      "a": "Correo · avisar a Javier"
+    },
+    {
+      "de": "Correo · avisar a Javier",
+      "salida": "main",
+      "a": "Fin · error"
+    }
+  ]
+}

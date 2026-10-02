@@ -1,0 +1,1307 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Sin red: la página no puede cargar ni enviar nada fuera de sí misma. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'">
+<title>RecordaCitas · recordatorios de cita por WhatsApp</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%85%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f5f6f8; --card: #ffffff; --texto: #17202a; --suave: #586574; --borde: #d5dbe3;
+  --prim: #0a7d5c; --prim-texto: #ffffff; --prim-hover: #086a4e;
+  --error: #b3261e; --error-bg: #fdecea; --aviso: #7a4b00; --aviso-bg: #fff4dc;
+  --ok: #0a6a4f; --ok-bg: #e6f5ef; --foco: #1a56db;
+  --sombra: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) {
+    --bg: #0e1318; --card: #161d25; --texto: #e7ecf2; --suave: #9aa7b5; --borde: #2b3541;
+    --prim: #2fbf8f; --prim-texto: #03150d; --prim-hover: #4ad3a4;
+    --error: #ff8f86; --error-bg: #3a1714; --aviso: #f2c26b; --aviso-bg: #33270d;
+    --ok: #5fdcae; --ok-bg: #0f2c22; --foco: #8ab4ff;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--texto);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.contenedor { width: 100%; max-width: 980px; margin: 0 auto; padding: 0 16px; }
+.cabecera { background: var(--card); border-bottom: 1px solid var(--borde); padding: 20px 0 16px; }
+h1 { margin: 0 0 4px; font-size: 1.6rem; line-height: 1.2; }
+.lema { margin: 0; color: var(--suave); max-width: 60ch; }
+main { padding: 16px 0 40px; }
+section.paso {
+  background: var(--card); border: 1px solid var(--borde); border-radius: 12px;
+  box-shadow: var(--sombra); padding: 16px; margin: 16px 0;
+}
+h2 { margin: 0 0 12px; font-size: 1.15rem; line-height: 1.3; }
+h2 .n {
+  display: inline-grid; place-items: center; width: 1.7em; height: 1.7em; margin-right: 8px;
+  border-radius: 50%; background: var(--prim); color: var(--prim-texto); font-size: .85rem;
+}
+label, .etiqueta { display: block; font-weight: 600; margin: 0 0 4px; }
+.ayuda-texto { color: var(--suave); font-size: .9rem; margin: 4px 0 0; }
+input[type=text], input[type=tel], input[type=date], input[type=time], input[type=number], select, textarea {
+  width: 100%; padding: 10px 12px; min-height: 44px; font: inherit; color: var(--texto);
+  background: var(--bg); border: 1px solid var(--borde); border-radius: 8px;
+}
+textarea { resize: vertical; line-height: 1.4; }
+#mensaje, #pegado { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92rem; }
+:where(a, button, input, select, textarea, summary):focus-visible,
+input[type=date]:focus-within, input[type=time]:focus-within { outline: 3px solid var(--foco); outline-offset: 2px; }
+.fila { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 640px) {
+  .fila.dos { grid-template-columns: 1fr 1fr; }
+  .fila.tres { grid-template-columns: 2fr 1fr 1fr; }
+  .fila.manual { grid-template-columns: 2fr 1.4fr 1fr 1fr; }
+}
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; padding: 8px 14px; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer;
+  color: var(--texto); background: var(--card); border: 1px solid var(--borde); border-radius: 8px;
+}
+.btn:hover { border-color: var(--suave); }
+.btn.primario { color: var(--prim-texto); background: var(--prim); border-color: var(--prim); }
+.btn.primario:hover { background: var(--prim-hover); border-color: var(--prim-hover); }
+.btn[disabled], .btn[aria-disabled=true] { opacity: .55; cursor: not-allowed; }
+.btn.chico { min-height: 36px; padding: 4px 10px; font-size: .9rem; }
+.acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; align-items: center; }
+.chips .btn { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 500; }
+.vista {
+  margin: 12px 0 0; padding: 12px; background: var(--ok-bg); color: var(--texto);
+  border-left: 4px solid var(--prim); border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere;
+  font: inherit;
+}
+.vista-titulo { margin: 12px 0 0; font-size: .85rem; color: var(--suave); font-weight: 600; }
+details.ayuda { margin: 12px 0 0; }
+details summary { cursor: pointer; font-weight: 600; }
+details.ayuda ol, details.ayuda ul { margin: 8px 0 0; padding-left: 22px; }
+.mensajes { margin: 12px 0 0; display: grid; gap: 8px; }
+.nota { padding: 10px 12px; border-radius: 8px; border-left: 4px solid; }
+.nota.error { background: var(--error-bg); color: var(--error); border-color: var(--error); }
+.nota.aviso { background: var(--aviso-bg); color: var(--aviso); border-color: var(--aviso); }
+.nota.info { background: var(--ok-bg); color: var(--ok); border-color: var(--prim); }
+.nota p { margin: 0; }
+.filtro { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: end; }
+.filtro .campo { min-width: 200px; }
+.marca { display: flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; }
+.marca input { width: 20px; height: 20px; margin: 0; }
+#resumen { margin: 16px 0 8px; font-weight: 600; }
+.grupo { margin: 20px 0 8px; font-size: 1rem; color: var(--suave); }
+.grupo::first-letter { text-transform: uppercase; }
+.lista { display: grid; gap: 12px; padding: 0; margin: 0; list-style: none; }
+.cita {
+  border: 1px solid var(--borde); border-radius: 10px; padding: 12px; background: var(--card);
+  display: grid; gap: 6px;
+}
+.cita.problema { border-color: var(--error); }
+.cita.abierta { background: var(--ok-bg); }
+.cita .cab { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.cita .nombre { font-weight: 700; font-size: 1.05rem; overflow-wrap: anywhere; }
+.cita .hora { font-weight: 700; font-variant-numeric: tabular-nums; }
+.cita .datos { color: var(--suave); font-size: .92rem; overflow-wrap: anywhere; }
+.etiq { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .78rem; font-weight: 700; margin-left: 6px; }
+.etiq.abierta { background: var(--prim); color: var(--prim-texto); }
+.etiq.ejemplo { background: var(--aviso-bg); color: var(--aviso); border: 1px solid var(--aviso); }
+.problemas { margin: 0; padding-left: 20px; }
+.problemas .e { color: var(--error); font-weight: 600; }
+.problemas .a { color: var(--aviso); }
+.cita details pre {
+  margin: 8px 0 0; padding: 10px; background: var(--bg); border-radius: 8px;
+  white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: .95rem;
+}
+.vacio { padding: 24px 12px; text-align: center; color: var(--suave); border: 1px dashed var(--borde); border-radius: 10px; }
+.fechas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; justify-content: center; }
+footer { padding: 8px 0 32px; color: var(--suave); font-size: .9rem; }
+footer p { margin: 6px 0; }
+.solo-lectores { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#archivo:focus-visible + label { outline: 3px solid var(--foco); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<header class="cabecera">
+  <div class="contenedor">
+    <h1>📅 RecordaCitas</h1>
+    <p class="lema">Recordatorios de cita por WhatsApp en un minuto: menos huecos vacíos, sin instalar nada y sin suscripciones.</p>
+  </div>
+</header>
+
+<main class="contenedor">
+
+  <section class="paso" aria-labelledby="t1">
+    <h2 id="t1"><span class="n">1</span>Tu negocio</h2>
+    <div class="fila tres">
+      <div>
+        <label for="negocio">Nombre de tu negocio</label>
+        <input id="negocio" type="text" maxlength="80" autocomplete="organization" placeholder="Peluquería Sol">
+      </div>
+      <div>
+        <label for="pais">País de tus clientes</label>
+        <select id="pais">
+          <option value="ES">España (+34)</option>
+          <option value="UY">Uruguay (+598)</option>
+          <option value="OTRO">Otro país…</option>
+        </select>
+      </div>
+      <div id="campo-prefijo" hidden>
+        <label for="prefijo">Prefijo del país</label>
+        <input id="prefijo" type="text" inputmode="numeric" maxlength="4" placeholder="54" aria-describedby="ayuda-prefijo">
+      </div>
+    </div>
+    <p class="ayuda-texto" id="ayuda-prefijo">Sirve para completar los teléfonos que no llevan prefijo internacional. Los que empiezan por + o 00 se respetan tal cual.</p>
+  </section>
+
+  <section class="paso" aria-labelledby="t2">
+    <h2 id="t2"><span class="n">2</span>El mensaje</h2>
+    <label for="plantilla">Modelo</label>
+    <select id="plantilla">
+      <option value="cita">Cita (clínica, estética, peluquería…)</option>
+      <option value="reserva">Reserva de restaurante</option>
+      <option value="personalizada">Personalizado</option>
+    </select>
+    <label for="mensaje" style="margin-top:12px">Texto del mensaje (puedes editarlo)</label>
+    <textarea id="mensaje" rows="8" maxlength="2000" spellcheck="true" aria-describedby="ayuda-mensaje"></textarea>
+    <div class="chips" role="group" aria-label="Insertar un dato en el mensaje">
+      <span class="ayuda-texto" style="margin:0">Insertar:</span>
+    </div>
+    <p class="ayuda-texto" id="ayuda-mensaje">Si a un cliente le falta algún dato (por ejemplo el servicio), la línea que lo usa se omite sola.</p>
+    <p class="vista-titulo" id="vista-titulo">Vista previa</p>
+    <pre class="vista" id="vista" aria-labelledby="vista-titulo"></pre>
+    <div class="mensajes" id="avisos-mensaje" role="status" aria-live="polite"></div>
+  </section>
+
+  <section class="paso" aria-labelledby="t3">
+    <h2 id="t3"><span class="n">3</span>Tus citas</h2>
+    <label for="pegado">Pega aquí la agenda (Excel, Google Sheets o CSV)</label>
+    <textarea id="pegado" rows="6" spellcheck="false" aria-describedby="ayuda-pegado"
+      placeholder="Nombre;Teléfono;Fecha;Hora;Servicio&#10;Laura García;612 345 678;30/09/2026;10:30;Corte y peinado"></textarea>
+    <p class="ayuda-texto" id="ayuda-pegado">
+      Columnas: <strong>Nombre, Teléfono, Fecha</strong> (día/mes/año) <strong>y Hora</strong>; opcionales: Servicio y Personas.
+      Con una primera fila de títulos da igual el orden; sin títulos, se usa el orden anterior.
+    </p>
+    <div class="acciones">
+      <input id="archivo" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" class="solo-lectores">
+      <label class="btn" for="archivo" style="margin:0">Elegir archivo CSV…</label>
+      <button type="button" class="btn" id="btn-ejemplo">Cargar ejemplo</button>
+      <button type="button" class="btn" id="btn-plantilla">Descargar plantilla</button>
+      <button type="button" class="btn" id="btn-vaciar">Vaciar todo</button>
+    </div>
+    <div class="mensajes" id="avisos-carga" role="status" aria-live="polite"></div>
+
+    <details class="ayuda" id="manual">
+      <summary>Añadir una cita a mano</summary>
+      <div class="fila manual" style="margin-top:12px">
+        <div><label for="m-nombre">Nombre</label><input id="m-nombre" type="text" maxlength="80" autocomplete="off"></div>
+        <div><label for="m-tel">Teléfono</label><input id="m-tel" type="tel" maxlength="24" autocomplete="off" inputmode="tel"></div>
+        <div><label for="m-fecha">Fecha</label><input id="m-fecha" type="date" min="2000-01-01" max="2099-12-31"></div>
+        <div><label for="m-hora">Hora</label><input id="m-hora" type="time"></div>
+      </div>
+      <div class="fila dos" style="margin-top:12px">
+        <div><label for="m-servicio">Servicio (opcional)</label><input id="m-servicio" type="text" maxlength="80" autocomplete="off"></div>
+        <div><label for="m-personas">Personas (opcional)</label><input id="m-personas" type="number" min="1" max="99" inputmode="numeric" autocomplete="off"></div>
+      </div>
+      <div class="acciones">
+        <button type="button" class="btn primario" id="btn-anadir">Añadir a la lista</button>
+      </div>
+      <div class="mensajes" id="avisos-manual" role="status" aria-live="polite"></div>
+    </details>
+  </section>
+
+  <section class="paso" aria-labelledby="t4">
+    <h2 id="t4"><span class="n">4</span>Envía los recordatorios</h2>
+    <div class="filtro">
+      <div class="campo">
+        <label for="dia">Citas del día</label>
+        <input id="dia" type="date" min="2000-01-01" max="2099-12-31">
+      </div>
+      <label class="marca"><input id="todas" type="checkbox"> Ver todas las fechas</label>
+    </div>
+    <div class="mensajes" id="avisos" role="status" aria-live="polite"></div>
+    <p id="resumen" aria-live="polite"></p>
+    <div id="lista-contenedor"></div>
+  </section>
+
+  <details class="ayuda paso" style="padding:16px">
+    <summary>¿Cómo funciona y qué hace con mis datos?</summary>
+    <ol>
+      <li>Pega la agenda de mañana (o elige el archivo) y comprueba que las citas y los teléfonos salen bien.</li>
+      <li>Pulsa <strong>Abrir WhatsApp</strong> en cada cita: se abre tu WhatsApp con el mensaje ya escrito. <strong>Tú pulsas «Enviar»</strong>; la herramienta no envía nada por su cuenta.</li>
+      <li>Las citas que ya has abierto se marcan para que no repitas el aviso.</li>
+    </ol>
+    <ul>
+      <li>Todo se hace en tu navegador. Los datos de tus clientes no se suben a ningún servidor ni se guardan en este dispositivo; solo se recuerdan el nombre del negocio, el país y el texto del mensaje.</li>
+      <li>El mensaje sale desde el WhatsApp que tengas abierto en ese navegador o móvil (mejor una cuenta de WhatsApp Business).</li>
+      <li>Los teléfonos deben ser móviles con WhatsApp. Si un cliente no lo tiene, usa «Copiar mensaje» y envíalo por SMS o correo.</li>
+    </ul>
+  </details>
+
+</main>
+
+<footer class="contenedor">
+  <p>RecordaCitas 1.0 · funciona sin conexión. Es una herramienta de apoyo, no asesoramiento legal: usa los datos de tus clientes solo para avisarles de su cita y conforme a tu política de privacidad.</p>
+</footer>
+
+<script id="core">
+/* ==========================================================================
+   Núcleo de RecordaCitas: lógica pura, sin DOM ni red.
+   tests/core.test.js extrae ESTE bloque del propio HTML y lo ejecuta, así que
+   lo que se prueba es exactamente lo que se entrega.
+   ========================================================================== */
+var RecordaCitas = (function () {
+  'use strict';
+
+  var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
+    'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  var DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+  // Países con reglas propias. Cualquier otro se trata con un prefijo escrito a mano.
+  var PAISES = {
+    ES: { nombre: 'España', prefijo: '34', largo: 9 },
+    UY: { nombre: 'Uruguay', prefijo: '598', largo: 8 }
+  };
+
+  // Datos que se pueden usar en el mensaje como {nombre}, {fecha}…
+  var CAMPOS = ['nombre', 'nombre_completo', 'fecha', 'hora', 'servicio', 'personas', 'negocio'];
+  var COLUMNAS_POR_DEFECTO = ['nombre', 'telefono', 'fecha', 'hora', 'servicio', 'personas'];
+  var ETIQUETA_COLUMNA = { telefono: 'Teléfono', fecha: 'Fecha', hora: 'Hora', nombre: 'Nombre' };
+
+  var PLANTILLAS = {
+    cita: {
+      nombre: 'Cita',
+      texto: 'Hola {nombre} 👋\n' +
+        'Te recordamos tu cita en {negocio}:\n' +
+        '📅 {fecha} a las {hora}\n' +
+        'Servicio: {servicio}\n' +
+        '¿Nos confirmas que vienes? Responde SÍ y listo. Si no puedes venir, avísanos con tiempo ' +
+        'para ofrecer el hueco a otra persona. ¡Gracias!'
+    },
+    reserva: {
+      nombre: 'Reserva',
+      texto: 'Hola {nombre} 👋\n' +
+        'Te recordamos tu reserva en {negocio}:\n' +
+        '📅 {fecha} a las {hora}\n' +
+        'Personas: {personas}\n' +
+        '¿Nos confirmas tu asistencia? Responde SÍ. Si no puedes venir, avísanos para liberar la mesa. ¡Gracias!'
+    }
+  };
+
+  /* ---------------------------------------------------------------- texto */
+
+  function texto(v) { return v === undefined || v === null ? '' : String(v); }
+  function limpiar(v) { return texto(v).replace(/\s+/g, ' ').trim(); }
+  function sinAcentos(s) { return texto(s).normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function pad4(n) { return ('000' + n).slice(-4); }
+
+  /* --------------------------------------------------------------- fechas
+     Aritmética de calendario pura (Date.UTC): no depende de la zona horaria
+     ni del horario de verano. Lo único que usa la hora local es hoyISO(), a
+     propósito: «mañana» es el mañana de quien usa la herramienta. */
+
+  function isoDe(y, m, d) { return pad4(y) + '-' + pad2(m) + '-' + pad2(d); }
+
+  function fechaValida(y, m, d) {
+    if (!(y >= 2000 && y <= 2099 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return false;
+    var f = new Date(Date.UTC(y, m - 1, d));
+    return f.getUTCFullYear() === y && f.getUTCMonth() === m - 1 && f.getUTCDate() === d;
+  }
+
+  function partesISO(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(texto(iso));
+    return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+  }
+
+  function sumarDias(iso, n) {
+    var p = partesISO(iso);
+    var f = new Date(Date.UTC(p.y, p.m - 1, p.d + n));
+    return isoDe(f.getUTCFullYear(), f.getUTCMonth() + 1, f.getUTCDate());
+  }
+
+  // Fecha local (no UTC: toISOString() daría «mañana» por la tarde-noche en América).
+  function hoyISO(ahora) {
+    var a = ahora || new Date();
+    return isoDe(a.getFullYear(), a.getMonth() + 1, a.getDate());
+  }
+
+  function diaSemana(iso) { // 0 = domingo
+    var p = partesISO(iso);
+    return new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay();
+  }
+
+  // «jueves 1 de octubre»; añade « de 2027» si el año no es el de «hoy».
+  function formatoFecha(iso, hoy) {
+    var p = partesISO(iso);
+    var s = DIAS[diaSemana(iso)] + ' ' + p.d + ' de ' + MESES[p.m - 1];
+    var h = hoy ? partesISO(hoy) : null;
+    if (h && h.y !== p.y) s += ' de ' + p.y;
+    return s;
+  }
+
+  // «01/10/2026» a partir de una fecha ISO
+  function formatoNumerico(iso) {
+    var p = partesISO(iso);
+    return pad2(p.d) + '/' + pad2(p.m) + '/' + pad4(p.y);
+  }
+
+  var DIA_SEMANA_NUM = { lun: 1, mar: 2, mie: 3, jue: 4, vie: 5, sab: 6, dom: 0 };
+  var DIA_SEMANA_RE = '(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo|lun|mar|mie|mier|jue|vie|sab|dom)';
+
+  var MES_POR_NOMBRE = (function () {
+    var m = {};
+    MESES.forEach(function (n, i) { m[n] = i + 1; m[n.slice(0, 3)] = i + 1; });
+    m.setiembre = 9; m.sept = 9; m.set = 9;
+    return m;
+  })();
+
+  function anioDe(a) { return a.length === 2 ? 2000 + (+a) : +a; }
+
+  /* Formatos: 30/09/2026 · 30-9-26 · 30.09.2026 · 2026-09-30 · 30 sep 2026 ·
+     30 de septiembre de 2026 · 30/09 (sin año) · con día de la semana delante.
+     Siempre día primero; «09/30/2026» se rechaza en vez de adivinarlo. */
+  function parsearFecha(raw, hoy) {
+    var original = limpiar(raw);
+    if (!original) return { ok: false, motivo: 'Falta la fecha' };
+    var noReconocida = { ok: false, motivo: 'No se entiende la fecha «' + original + '». Usa día/mes/año, por ejemplo 30/09/2026' };
+    var t = sinAcentos(original).toLowerCase();
+    var dow = null, m;
+    var mDow = new RegExp('^(' + DIA_SEMANA_RE + ')\\.?,?\\s+(?=\\d)').exec(t);
+    if (mDow) { dow = DIA_SEMANA_NUM[mDow[1].slice(0, 3)]; t = t.slice(mDow[0].length); }
+
+    var y, mes, d;
+    if ((m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/.exec(t))) {
+      y = +m[1]; mes = +m[2]; d = +m[3];
+    } else if ((m = /^(\d{1,2})[-\/.](\d{1,2})(?:[-\/.](\d{4}|\d{2}))?$/.exec(t))) {
+      d = +m[1]; mes = +m[2]; y = m[3] ? anioDe(m[3]) : null;
+    } else if ((m = /^(\d{1,2})\s*(?:de\s+)?([a-z]+)\.?(?:\s*(?:de\s+)?(\d{4}|\d{2}))?$/.exec(t))) {
+      mes = MES_POR_NOMBRE[m[2]];
+      if (!mes) return noReconocida;
+      d = +m[1]; y = m[3] ? anioDe(m[3]) : null;
+    } else {
+      return noReconocida;
+    }
+
+    var anioSupuesto = false;
+    if (y === null) {
+      var h = hoy ? partesISO(hoy) : null;
+      if (!h) return { ok: false, motivo: 'Falta el año en la fecha «' + original + '» (escribe, por ejemplo, 30/09/2026)' };
+      y = h.y; anioSupuesto = true;
+      // Sin año: si esa fecha quedó más de 30 días atrás, se entiende que es del año siguiente.
+      if (fechaValida(y, mes, d) && isoDe(y, mes, d) < sumarDias(hoy, -30)) y = h.y + 1;
+    }
+    if (!fechaValida(y, mes, d)) return { ok: false, motivo: 'La fecha «' + original + '» no existe o su año no es válido' };
+    return { ok: true, iso: isoDe(y, mes, d), y: y, m: mes, d: d, anioSupuesto: anioSupuesto, diaSemanaTexto: dow };
+  }
+
+  /* ---------------------------------------------------------------- horas
+     10:30 · 9.15 · 10h30 · 10h · 10 hs · 10:30:00 · 5:30 pm · 5 p.m. · 1730 · 930 */
+  function parsearHora(raw) {
+    var original = limpiar(raw);
+    if (!original) return { ok: false, motivo: 'Falta la hora' };
+    var t = sinAcentos(original).toLowerCase();
+    var sufijo = null, m;
+    if ((m = /^(.*?)\s*([ap])\.?\s?m\.?$/.exec(t))) { sufijo = m[2]; t = m[1]; }
+    var h, mi;
+    if ((m = /^(\d{1,2})[:.h](\d{2})(?::\d{2})?\s*(?:h|hs|hrs|hr|horas)?\.?$/.exec(t))) { h = +m[1]; mi = +m[2]; }
+    else if ((m = /^(\d{1,2})\s*(?:h|hs|hrs|hr|horas)\.?$/.exec(t))) { h = +m[1]; mi = 0; }
+    else if ((m = /^(\d{1,2})$/.exec(t))) { h = +m[1]; mi = 0; }
+    else if (!sufijo && (m = /^(\d{1,2})(\d{2})$/.exec(t))) { h = +m[1]; mi = +m[2]; }
+    else return { ok: false, motivo: 'No se entiende la hora «' + original + '». Usa el formato 10:30' };
+
+    if (mi > 59) return { ok: false, motivo: 'La hora «' + original + '» no es válida (minutos fuera de rango)' };
+    if (sufijo) {
+      if (h < 1 || h > 12) return { ok: false, motivo: 'La hora «' + original + '» no es válida' };
+      h = (h % 12) + (sufijo === 'p' ? 12 : 0);
+    } else if (h > 23) {
+      return { ok: false, motivo: 'La hora «' + original + '» no es válida' };
+    }
+    return { ok: true, h: h, m: mi, texto: h + ':' + pad2(mi), minutos: h * 60 + mi };
+  }
+
+  // Celda «fecha y hora» juntas: «30/09/2026 10:30», «2026-09-30T10:30:00»…
+  function separarFechaHora(celda) {
+    var s = limpiar(celda), m;
+    if ((m = /^(\d{4}-\d{2}-\d{2})[Tt ](\d{1,2}:\d{2}(?::\d{2})?)$/.exec(s))) return { fecha: m[1], hora: m[2] };
+    m = /^(.*\S)(?:\s+|,\s*)(\d{1,2}[:.h]\d{2}(?::\d{2})?(?:\s*(?:[ap]\.?\s?m\.?|h|hs|hrs))?)$/i.exec(s);
+    return m ? { fecha: m[1].replace(/\s*,$/, ''), hora: m[2] } : { fecha: s, hora: '' };
+  }
+
+  /* ------------------------------------------------------------ teléfonos
+     Devuelve los dígitos en formato internacional, que es lo que exige WhatsApp
+     (sin +, sin ceros iniciales, sin espacios). */
+
+  function fallo(motivo) { return { ok: false, motivo: motivo }; }
+
+  function visibleTelefono(codigo, nacional) {
+    if (codigo === '34') return '+34 ' + nacional.slice(0, 3) + ' ' + nacional.slice(3, 6) + ' ' + nacional.slice(6);
+    if (codigo === '598') return '+598 ' + nacional.slice(0, 2) + ' ' + nacional.slice(2, 5) + ' ' + nacional.slice(5);
+    return '+' + codigo + nacional;
+  }
+
+  function normalizarTelefono(raw, pais, prefijoOtro) {
+    var original = limpiar(raw);
+    if (!original) return fallo('Falta el teléfono');
+    if (/^[\d.,]+e[+-]?\d+$/i.test(original)) {
+      return fallo('El teléfono está en notación científica (Excel lo ha deformado). Da formato de texto a la columna y vuelve a copiarla');
+    }
+    if (/^\d+\.0+$/.test(original)) original = original.replace(/\.0+$/, ''); // 612345678.0 (exportado como número)
+    var compacto = original.replace(/[\s().\-]/g, ''); // «(+34) 612-345-678» → «+34612345678»
+    if (/[^\d\s()+.\-]/.test(original) || compacto.lastIndexOf('+') > 0) {
+      return fallo('El teléfono contiene caracteres no válidos: «' + original + '»');
+    }
+    var internacional = false, digitos;
+    if (compacto.charAt(0) === '+') { internacional = true; digitos = compacto.slice(1); }
+    else if (compacto.slice(0, 2) === '00') { internacional = true; digitos = compacto.slice(2); }
+    else digitos = compacto;
+    if (!/^\d+$/.test(digitos)) return fallo('El teléfono contiene caracteres no válidos: «' + original + '»');
+
+    var codigo, nacional;
+    var conocidoES = digitos.length === 11 && digitos.indexOf('34') === 0;
+    var conocidoUY = digitos.length === 11 && digitos.indexOf('598') === 0;
+    if (internacional) {
+      if (digitos.indexOf('34') === 0) { codigo = '34'; nacional = digitos.slice(2); }
+      else if (digitos.indexOf('598') === 0) { codigo = '598'; nacional = digitos.slice(3); }
+      else { codigo = ''; nacional = digitos; } // otro país: solo se comprueba la longitud
+    } else if (PAISES[pais]) {
+      // Con país conocido se aceptan también «34612345678» y «59899123456» escritos sin +.
+      if (conocidoES) { codigo = '34'; nacional = digitos.slice(2); }
+      else if (conocidoUY) { codigo = '598'; nacional = digitos.slice(3); }
+      else { codigo = PAISES[pais].prefijo; nacional = digitos; }
+    } else {
+      var pref = limpiar(prefijoOtro).replace(/\D/g, '');
+      if (!/^[1-9]\d{0,3}$/.test(pref)) {
+        return fallo('Indica el prefijo de tu país (por ejemplo 54) o escribe el teléfono completo con +');
+      }
+      codigo = pref; nacional = digitos.replace(/^0/, '');
+    }
+
+    var aviso = null;
+    if (codigo === '34') {
+      if (nacional.length !== 9) return fallo('Un teléfono de España tiene 9 dígitos (por ejemplo 612 345 678): «' + original + '»');
+      if (!/^[6-9]/.test(nacional)) return fallo('Los teléfonos de España empiezan por 6, 7, 8 o 9: «' + original + '»');
+      if (/^[89]/.test(nacional)) aviso = 'Parece un teléfono fijo: WhatsApp necesita un móvil';
+    } else if (codigo === '598') {
+      if (nacional.length === 9 && nacional.charAt(0) === '0') nacional = nacional.slice(1); // 099 123 456
+      if (nacional.length !== 8) return fallo('Un teléfono de Uruguay tiene 8 dígitos, o 9 con el 0 inicial (por ejemplo 099 123 456): «' + original + '»');
+      if (nacional.charAt(0) !== '9') aviso = 'Parece un teléfono fijo: WhatsApp necesita un móvil';
+    } else {
+      var total = (codigo + nacional).length;
+      if (total < 8 || total > 15) return fallo('El teléfono no tiene una longitud válida: «' + original + '»');
+    }
+    return { ok: true, digitos: codigo + nacional, visible: visibleTelefono(codigo, nacional), aviso: aviso };
+  }
+
+  /* -------------------------------------------------------------- nombres */
+
+  var PARTICULAS = ['de', 'del', 'la', 'las', 'los', 'y', 'e', 'da', 'do', 'dos', 'das', 'di', 'van', 'von', 'der', 'den'];
+
+  function capitalizarPalabra(p) {
+    return p.split(/([-'’])/).map(function (x) {
+      return /^[-'’]$/.test(x) ? x : x.charAt(0).toUpperCase() + x.slice(1).toLowerCase();
+    }).join('');
+  }
+
+  // «GARCÍA PÉREZ, LAURA» → «Laura García Pérez»; «MARÍA LÓPEZ» → «María López».
+  // Si el nombre ya viene con mayúsculas y minúsculas mezcladas, se respeta tal cual.
+  function normalizarNombre(raw) {
+    var s = limpiar(raw);
+    if (!s) return '';
+    var coma = s.indexOf(',');
+    if (coma > 0 && coma < s.length - 1) s = limpiar(s.slice(coma + 1) + ' ' + s.slice(0, coma)); // «Apellidos, Nombre»
+    var soloMayus = s === s.toUpperCase() && s !== s.toLowerCase();
+    var soloMinus = s === s.toLowerCase() && s !== s.toUpperCase();
+    if (!soloMayus && !soloMinus) return s;
+    return s.split(' ').map(function (w, i) {
+      var l = w.toLowerCase();
+      return (i > 0 && PARTICULAS.indexOf(l) >= 0) ? l : capitalizarPalabra(w);
+    }).join(' ');
+  }
+
+  // Nombre de pila para el saludo: «Laura García» → «Laura»; «Mª José Ruiz» → «Mª José».
+  function primerNombre(nombre) {
+    var partes = limpiar(nombre).split(' ');
+    if (!partes[0]) return '';
+    if (partes.length > 1 && partes[0].replace(/[.ªº]/g, '').length <= 2) return partes[0] + ' ' + partes[1];
+    return partes[0];
+  }
+
+  /* --------------------------------------------- tabla: CSV, TSV, pegado */
+
+  // Delimitador de la primera línea con contenido, ignorando lo que va entre comillas.
+  function detectarDelimitador(t) {
+    var inicio = t.search(/\S/);
+    if (inicio < 0) return null;
+    var cuenta = { '\t': 0, ';': 0, ',': 0 }, enComillas = false;
+    for (var i = inicio; i < t.length; i++) {
+      var c = t.charAt(i);
+      if (c === '"') { enComillas = !enComillas; continue; }
+      if (!enComillas && (c === '\n' || c === '\r')) break;
+      if (!enComillas && Object.prototype.hasOwnProperty.call(cuenta, c)) cuenta[c]++;
+    }
+    var mejor = null, max = 0;
+    ['\t', ';', ','].forEach(function (d) { if (cuenta[d] > max) { max = cuenta[d]; mejor = d; } });
+    return mejor;
+  }
+
+  // Analizador CSV tolerante (RFC 4180): comillas, comillas dobles, saltos de línea
+  // dentro de un campo, \r\n / \n / \r. Descarta las filas totalmente vacías.
+  function analizarTabla(entrada) {
+    var t = texto(entrada).replace(/^﻿/, '');
+    var delim = detectarDelimitador(t);
+    var filas = [], fila = [], campo = '';
+    var i = 0, n = t.length, linea = 1, lineaInicio = 1, sinCerrar = false;
+
+    function cerrarCampo() { fila.push(campo.trim()); campo = ''; }
+    function cerrarFila() {
+      cerrarCampo();
+      if (fila.some(function (x) { return x !== ''; })) filas.push({ celdas: fila, linea: lineaInicio });
+      fila = [];
+    }
+
+    while (i < n) {
+      var c = t.charAt(i);
+      if (c === '"' && campo.trim() === '') { // comienzo de campo entrecomillado
+        campo = ''; i++;
+        var cerrada = false;
+        while (i < n) {
+          var d = t.charAt(i);
+          if (d === '"') {
+            if (t.charAt(i + 1) === '"') { campo += '"'; i += 2; continue; }
+            i++; cerrada = true; break;
+          }
+          if (d === '\n') linea++;
+          campo += d; i++;
+        }
+        if (!cerrada) sinCerrar = true;
+        continue;
+      }
+      if (delim && c === delim) { cerrarCampo(); i++; continue; }
+      if (c === '\r' || c === '\n') {
+        if (c === '\r' && t.charAt(i + 1) === '\n') i++;
+        i++; cerrarFila(); linea++; lineaInicio = linea;
+        continue;
+      }
+      campo += c; i++;
+    }
+    if (campo !== '' || fila.length) cerrarFila();
+
+    var avisos = [];
+    if (sinCerrar) avisos.push('Hay unas comillas (") sin cerrar en el texto pegado: revisa que cada campo entrecomillado termine bien.');
+    return { filas: filas, delimitador: delim, avisos: avisos };
+  }
+
+  var SINONIMOS = {
+    nombre: ['nombre', 'nombrecompleto', 'nombreyapellidos', 'nombreyapellido', 'apellidosynombre', 'cliente', 'clienta',
+      'paciente', 'name', 'contacto', 'titular'],
+    telefono: ['telefono', 'telefonomovil', 'movil', 'celular', 'cel', 'tel', 'telf', 'tlf', 'tlfno', 'whatsapp', 'wsp',
+      'wpp', 'phone', 'mobile', 'numerodetelefono', 'numtelefono', 'nrotelefono'],
+    fecha: ['fecha', 'fechacita', 'fechadelacita', 'fechareserva', 'fechadereserva', 'dia', 'date', 'fechayhora',
+      'fechahora', 'fechaehora', 'datetime', 'diayhora'],
+    hora: ['hora', 'horacita', 'horadelacita', 'horareserva', 'horadereserva', 'horainicio', 'time'],
+    servicio: ['servicio', 'servicios', 'tratamiento', 'motivo', 'concepto', 'prestacion', 'service', 'actividad',
+      'tipo', 'tipodecita'],
+    personas: ['personas', 'comensales', 'pax', 'npersonas', 'nopersonas', 'numpersonas', 'numerodepersonas',
+      'ndepersonas', 'ncomensales', 'numcomensales', 'cubiertos']
+  };
+
+  function claveEncabezado(s) { return sinAcentos(s).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+  // {campo: índice de columna} para las celdas de una fila de títulos.
+  function mapearEncabezado(celdas) {
+    var mapa = {};
+    celdas.forEach(function (celda, idx) {
+      var k = claveEncabezado(celda);
+      if (!k) return;
+      Object.keys(SINONIMOS).forEach(function (campo) {
+        if (!(campo in mapa) && SINONIMOS[campo].indexOf(k) >= 0) mapa[campo] = idx;
+      });
+    });
+    return mapa;
+  }
+
+  // Texto pegado o CSV → filas con {nombre, telefono, fecha, hora, servicio, personas}.
+  function leerAgenda(entrada) {
+    var tabla = analizarTabla(entrada);
+    var res = { filas: [], encabezado: false, columnas: {}, delimitador: tabla.delimitador, avisos: tabla.avisos.slice(), error: null };
+    if (!tabla.filas.length) return res;
+
+    var primera = tabla.filas[0].celdas;
+    var mapa = mapearEncabezado(primera);
+    var datos = tabla.filas;
+    if (Object.keys(mapa).length >= 2) {
+      res.encabezado = true; res.columnas = mapa; datos = tabla.filas.slice(1);
+      var faltan = ['telefono', 'fecha'].filter(function (k) { return !(k in mapa); });
+      if (faltan.length) {
+        res.error = 'Falta la columna «' + faltan.map(function (k) { return ETIQUETA_COLUMNA[k]; }).join('» y «') +
+          '» en la primera fila. Columnas encontradas: ' +
+          primera.filter(Boolean).map(function (c) { return '«' + c + '»'; }).join(', ') + '.';
+        return res;
+      }
+    } else {
+      COLUMNAS_POR_DEFECTO.forEach(function (k, i) { mapa[k] = i; });
+      res.columnas = mapa;
+    }
+    datos.forEach(function (f) {
+      var o = { _linea: f.linea };
+      Object.keys(res.columnas).forEach(function (k) { o[k] = limpiar(f.celdas[res.columnas[k]]); });
+      res.filas.push(o);
+    });
+    return res;
+  }
+
+  /* --------------------------------------------------------------- citas */
+
+  function construirCita(fila, opc, orden) {
+    var problemas = [];
+    var partes = separarFechaHora(fila.fecha);
+    var horaTexto = limpiar(fila.hora) || partes.hora;
+    var tel = normalizarTelefono(fila.telefono, opc.pais, opc.prefijo);
+    var fec = parsearFecha(partes.fecha, opc.hoy);
+    var hor = parsearHora(horaTexto);
+    var nombre = normalizarNombre(fila.nombre);
+
+    if (!tel.ok) problemas.push({ nivel: 'error', texto: tel.motivo });
+    else if (tel.aviso) problemas.push({ nivel: 'aviso', texto: tel.aviso });
+    if (!fec.ok) {
+      problemas.push({ nivel: 'error', texto: fec.motivo });
+    } else {
+      if (fec.anioSupuesto) problemas.push({ nivel: 'aviso', texto: 'La fecha no indica el año: se ha supuesto ' + fec.y });
+      if (fec.diaSemanaTexto !== null && fec.diaSemanaTexto !== diaSemana(fec.iso)) {
+        problemas.push({ nivel: 'aviso', texto: 'El día de la semana escrito no coincide con la fecha (¿año equivocado?)' });
+      }
+      if (opc.hoy && fec.iso < opc.hoy) problemas.push({ nivel: 'aviso', texto: 'Esta fecha ya ha pasado' });
+    }
+    if (!hor.ok) problemas.push({ nivel: 'error', texto: hor.motivo });
+    if (!nombre) problemas.push({ nivel: 'aviso', texto: 'Sin nombre: el saludo no podrá incluirlo' });
+
+    return {
+      orden: orden,
+      origen: fila._origen || 'pegado',
+      linea: fila._linea || null,
+      manualIdx: fila._manualIdx,
+      nombre: nombre,
+      servicio: limpiar(fila.servicio),
+      personas: limpiar(fila.personas),
+      crudo: { telefono: limpiar(fila.telefono), fecha: limpiar(fila.fecha), hora: horaTexto },
+      telefono: tel, fecha: fec, hora: hor,
+      problemas: problemas,
+      lista: tel.ok && fec.ok && hor.ok,
+      id: (tel.ok ? tel.digitos : 'x') + '|' + (fec.ok ? fec.iso : 'x') + '|' + (hor.ok ? hor.texto : 'x') + '|' + nombre
+    };
+  }
+
+  function marcarDuplicadas(citas) {
+    var vistas = {};
+    citas.forEach(function (c) {
+      if (!c.lista) return;
+      var k = c.telefono.digitos + '|' + c.fecha.iso + '|' + c.hora.texto;
+      if (vistas[k]) c.problemas.push({ nivel: 'aviso', texto: 'Posible duplicada: ya hay otra cita con el mismo teléfono, fecha y hora' });
+      vistas[k] = true;
+    });
+  }
+
+  function ordenarCitas(citas) {
+    return citas.slice().sort(function (a, b) {
+      if (!a.fecha.ok || !b.fecha.ok) {
+        if (a.fecha.ok !== b.fecha.ok) return a.fecha.ok ? -1 : 1;
+        return a.orden - b.orden;
+      }
+      if (a.fecha.iso !== b.fecha.iso) return a.fecha.iso < b.fecha.iso ? -1 : 1;
+      var ma = a.hora.ok ? a.hora.minutos : 1e9, mb = b.hora.ok ? b.hora.minutos : 1e9;
+      if (ma !== mb) return ma - mb;
+      return a.orden - b.orden;
+    });
+  }
+
+  // opc: { pais: 'ES' | 'UY' | 'OTRO', prefijo: '54', hoy: 'AAAA-MM-DD' }
+  function construirCitas(filas, opc) {
+    var citas = filas.map(function (f, i) { return construirCita(f, opc || {}, i); });
+    marcarDuplicadas(citas);
+    return ordenarCitas(citas);
+  }
+
+  // Las de otras fechas se ocultan; las que no tienen fecha válida se muestran siempre.
+  function filtrarPorFecha(citas, iso) {
+    if (!iso) return { visibles: citas.slice(), ocultas: 0 };
+    var visibles = citas.filter(function (c) { return !c.fecha.ok || c.fecha.iso === iso; });
+    return { visibles: visibles, ocultas: citas.length - visibles.length };
+  }
+
+  function fechasEncontradas(citas) {
+    var cuenta = {};
+    citas.forEach(function (c) { if (c.fecha.ok) cuenta[c.fecha.iso] = (cuenta[c.fecha.iso] || 0) + 1; });
+    return Object.keys(cuenta).sort().map(function (iso) { return { iso: iso, n: cuenta[iso] }; });
+  }
+
+  // Avisos globales que ayudan a entender por qué falla todo.
+  function diagnostico(agenda, citas) {
+    var pistas = [];
+    if (!agenda.encabezado && citas.length && citas.every(function (c) { return !c.fecha.ok && !c.hora.ok; })) {
+      pistas.push('Ninguna fila tiene fecha ni hora válidas. Si tus columnas van en otro orden, añade una primera fila con los títulos: Nombre, Teléfono, Fecha, Hora, Servicio.');
+    }
+    return pistas;
+  }
+
+  /* ------------------------------------------------------------- mensaje */
+
+  // Sustituye {campos}. Una línea se omite solo si faltan TODOS sus datos («Servicio: {servicio}» sin servicio);
+  // si falta uno pero hay otros («Hola {nombre}, tu cita es {fecha}»), la línea se conserva y se ordena el hueco,
+  // para que la fecha y la hora nunca desaparezcan del mensaje por faltar un dato secundario.
+  function renderizar(plantilla, vars) {
+    var lineas = texto(plantilla).replace(/\r\n?/g, '\n').split('\n');
+    var salida = [];
+    lineas.forEach(function (linea) {
+      var total = 0, vacios = 0;
+      var l = linea.replace(/\{([A-Za-z_]+)\}/g, function (m, clave) {
+        var k = clave.toLowerCase();
+        if (!Object.prototype.hasOwnProperty.call(vars, k)) return m;
+        total++;
+        var v = limpiar(vars[k]);
+        if (!v) { vacios++; return ''; }
+        return v;
+      });
+      if (total > 0 && vacios === total) return;
+      if (vacios > 0) l = l.replace(/\s+([,.;:!?])/g, '$1').replace(/^[\s,;:]+/, '').replace(/ {2,}/g, ' ');
+      salida.push(l.replace(/[ \t]+$/, ''));
+    });
+    return salida.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  function variablesMensaje(cita, cfg) {
+    return {
+      nombre: primerNombre(cita.nombre),
+      nombre_completo: cita.nombre,
+      fecha: cita.fecha.ok ? formatoFecha(cita.fecha.iso, cfg.hoy) : '',
+      hora: cita.hora.ok ? cita.hora.texto : '',
+      servicio: cita.servicio,
+      personas: cita.personas,
+      negocio: limpiar(cfg.negocio)
+    };
+  }
+
+  function mensajeDe(cita, cfg) { return renderizar(cfg.plantilla, variablesMensaje(cita, cfg)); }
+
+  // Problemas del texto del mensaje. Los «bloqueantes» impiden enviar: un aviso a un
+  // cliente con «{nombr}» o sin el nombre del negocio es peor que no enviarlo.
+  function problemasPlantilla(plantilla, cfg) {
+    var bloqueantes = [], avisos = [];
+    var p = texto(plantilla);
+    if (!p.trim()) return { bloqueantes: ['El mensaje está vacío.'], avisos: avisos };
+    var usados = {}, desconocidos = [];
+    p.replace(/\{([A-Za-z_]+)\}/g, function (m, clave) {
+      var k = clave.toLowerCase();
+      usados[k] = true;
+      if (CAMPOS.indexOf(k) < 0 && desconocidos.indexOf('{' + k + '}') < 0) desconocidos.push('{' + k + '}');
+      return m;
+    });
+    if (desconocidos.length) {
+      bloqueantes.push('El mensaje usa datos que no existen: ' + desconocidos.join(', ') + '. Los disponibles son: ' +
+        CAMPOS.map(function (c) { return '{' + c + '}'; }).join(', ') + '.');
+    }
+    if (/[{}]/.test(p.replace(/\{[A-Za-z_]+\}/g, ''))) {
+      bloqueantes.push('Hay llaves { } sueltas o mal escritas. Un dato se escribe así: {nombre}.');
+    }
+    if (usados.negocio && !limpiar(cfg && cfg.negocio)) {
+      bloqueantes.push('Escribe el nombre de tu negocio en el paso 1: el mensaje lo usa ({negocio}).');
+    }
+    if (!usados.fecha && !usados.hora) {
+      avisos.push('El mensaje no incluye {fecha} ni {hora}: tu cliente no sabrá cuándo es su cita.');
+    }
+    p.replace(/\r\n?/g, '\n').split('\n').forEach(function (linea) {
+      var claves = [];
+      linea.replace(/\{([A-Za-z_]+)\}/g, function (m, clave) { claves.push(clave.toLowerCase()); return m; });
+      var opcionales = claves.filter(function (k) { return k === 'servicio' || k === 'personas'; });
+      if (opcionales.length && claves.length > opcionales.length) {
+        avisos.push('La línea «' + linea.trim() + '» mezcla {' + opcionales[0] + '}, que puede faltar, con otros datos: ' +
+          'si falta, quedará un hueco en la frase. Pon cada dato opcional en su propia línea.');
+      }
+    });
+    return { bloqueantes: bloqueantes, avisos: avisos };
+  }
+
+  // https://api.whatsapp.com/send?phone=<número internacional sin +>&text=<mensaje codificado>
+  // No se usa wa.me: su redirección convierte el texto a una codificación limitada y sustituye los emojis
+  // (y cualquier carácter fuera de Windows-1252) por «�». api.whatsapp.com, a donde redirige wa.me, los conserva.
+  function enlaceWhatsApp(digitos, mensaje) {
+    if (!/^\d{8,15}$/.test(texto(digitos))) return null;
+    try {
+      return 'https://api.whatsapp.com/send?phone=' + digitos + '&text=' + encodeURIComponent(mensaje);
+    } catch (e) { // texto con un carácter Unicode incompleto
+      return null;
+    }
+  }
+
+  /* -------------------------------------------------- archivos y ejemplos */
+
+  function esExcel(bytes) {
+    return bytes.length >= 4 && (
+      (bytes[0] === 0x50 && bytes[1] === 0x4B && bytes[2] === 0x03 && bytes[3] === 0x04) || // .xlsx (zip)
+      (bytes[0] === 0xD0 && bytes[1] === 0xCF && bytes[2] === 0x11 && bytes[3] === 0xE0));  // .xls antiguo
+  }
+
+  // UTF-8 (con o sin BOM), UTF-16 con BOM (Excel «Texto Unicode») o, si no es UTF-8
+  // válido, Windows-1252: el «CSV» de Excel en español, que rompería las tildes.
+  function decodificarTexto(bytes) {
+    if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+    if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^﻿/, '');
+    } catch (e) {
+      return new TextDecoder('windows-1252').decode(bytes);
+    }
+  }
+
+  function plantillaCSV() { return '﻿Nombre;Teléfono;Fecha;Hora;Servicio;Personas\r\n'; }
+
+  // Agenda de ejemplo para el día iso. Los números son ficticios.
+  function ejemploAgenda(iso, pais, tipo) {
+    var f = formatoNumerico(iso);
+    var tel = pais === 'UY' ? ['099 000 001', '099 000 002', '099 000 003', '099 000 004']
+      : pais === 'OTRO' ? ['+34 600 000 001', '+34 600 000 002', '+34 600 000 003', '+34 600 000 004']
+      : ['600 000 001', '600 000 002', '600 000 003', '600 000 004'];
+    var filas = tipo === 'reserva'
+      ? [['Laura García', tel[0], f, '13:30', '', '2'], ['Marcos Pérez', tel[1], f, '14:00', '', '4'],
+        ['Sofía Martínez', tel[2], f, '21:00', '', '3'], ['Diego Fernández', tel[3], f, '21:30', '', '2'],
+        ['Carmen Ruiz', '12345', f, '22:00', '', '2']]
+      : [['Laura García', tel[0], f, '9:30', 'Corte y peinado', ''], ['Marcos Pérez', tel[1], f, '10:15', 'Revisión', ''],
+        ['Sofía Martínez', tel[2], f, '11:00', 'Tratamiento facial', ''], ['Diego Fernández', tel[3], f, '12:30', 'Masaje', ''],
+        ['Carmen Ruiz', '12345', f, '17:00', 'Limpieza', '']];
+    return 'Nombre;Teléfono;Fecha;Hora;Servicio;Personas\n' + filas.map(function (r) { return r.join(';'); }).join('\n');
+  }
+
+  // Teléfonos ficticios de los ejemplos: la interfaz nunca ofrece enviarles nada.
+  var NUMEROS_EJEMPLO = ['34600000001', '34600000002', '34600000003', '34600000004',
+    '59899000001', '59899000002', '59899000003', '59899000004'];
+  function esNumeroDeEjemplo(digitos) { return NUMEROS_EJEMPLO.indexOf(digitos) >= 0; }
+
+  return {
+    PLANTILLAS: PLANTILLAS, PAISES: PAISES, CAMPOS: CAMPOS, NUMEROS_EJEMPLO: NUMEROS_EJEMPLO,
+    hoyISO: hoyISO, sumarDias: sumarDias, diaSemana: diaSemana, formatoFecha: formatoFecha, formatoNumerico: formatoNumerico,
+    parsearFecha: parsearFecha, parsearHora: parsearHora, separarFechaHora: separarFechaHora,
+    normalizarTelefono: normalizarTelefono, normalizarNombre: normalizarNombre, primerNombre: primerNombre,
+    analizarTabla: analizarTabla, leerAgenda: leerAgenda,
+    construirCitas: construirCitas, filtrarPorFecha: filtrarPorFecha, fechasEncontradas: fechasEncontradas, diagnostico: diagnostico,
+    renderizar: renderizar, mensajeDe: mensajeDe, variablesMensaje: variablesMensaje, problemasPlantilla: problemasPlantilla,
+    enlaceWhatsApp: enlaceWhatsApp,
+    esExcel: esExcel, decodificarTexto: decodificarTexto, plantillaCSV: plantillaCSV, ejemploAgenda: ejemploAgenda,
+    esNumeroDeEjemplo: esNumeroDeEjemplo
+  };
+})();
+</script>
+
+<script id="app">
+/* ==========================================================================
+   Interfaz. Todo el contenido de clientes entra en la página con textContent
+   y setAttribute (nunca innerHTML), así que un nombre como <img onerror=…>
+   se muestra como texto y no se ejecuta.
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  var RC = RecordaCitas;
+  var CLAVE = 'recordacitas:v1';
+  var MAX_ARCHIVO = 2 * 1024 * 1024;
+  var estado = { manual: [], abiertos: {}, ultima: null };
+
+  function $(id) { return document.getElementById(id); }
+  function tiene(obj, k) { return Object.prototype.hasOwnProperty.call(obj, k); }
+
+  function el(tag, attrs, hijos) {
+    var e = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k === 'class') e.className = v;
+      else if (k === 'text') e.textContent = v;
+      else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v === true ? '' : v);
+    });
+    (hijos || []).forEach(function (h) { if (h) e.appendChild(typeof h === 'string' ? document.createTextNode(h) : h); });
+    return e;
+  }
+  function vaciar(nodo) { while (nodo.firstChild) nodo.removeChild(nodo.firstChild); }
+  function nota(tipo, textos) {
+    return el('div', { class: 'nota ' + tipo }, (Array.isArray(textos) ? textos : [textos]).map(function (t) { return el('p', { text: t }); }));
+  }
+
+  /* ---------------------------------------------------------- persistencia
+     Solo se guardan ajustes del negocio; nunca datos de clientes. */
+  function leerConfig() {
+    try {
+      var c = JSON.parse(localStorage.getItem(CLAVE) || '{}');
+      return c && typeof c === 'object' ? c : {};
+    } catch (e) { return {}; }
+  }
+  function guardarConfig() {
+    try {
+      localStorage.setItem(CLAVE, JSON.stringify({
+        negocio: $('negocio').value, pais: $('pais').value, prefijo: $('prefijo').value,
+        plantilla: $('plantilla').value, mensaje: $('mensaje').value
+      }));
+    } catch (e) { /* almacenamiento bloqueado (modo privado): la herramienta sigue funcionando */ }
+  }
+
+  /* -------------------------------------------------------------- copiar */
+  function copiarRespaldo(t) {
+    var ta = el('textarea', { readonly: true, 'aria-hidden': 'true', tabindex: '-1', style: 'position:fixed;opacity:0;top:0;left:0' });
+    ta.value = t;
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+  function copiar(t, boton) {
+    function fin(ok) {
+      var original = boton.getAttribute('data-texto') || boton.textContent;
+      boton.setAttribute('data-texto', original);
+      boton.textContent = ok ? 'Copiado ✓' : 'No se pudo copiar: usa «Ver mensaje»';
+      setTimeout(function () { boton.textContent = original; }, 2200);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(function () { fin(true); }, function () { fin(copiarRespaldo(t)); });
+    } else {
+      fin(copiarRespaldo(t));
+    }
+  }
+
+  /* ------------------------------------------------------------ pintar */
+  function configActual() {
+    return { negocio: $('negocio').value, plantilla: $('mensaje').value, hoy: RC.hoyISO(new Date()) };
+  }
+
+  function pintarVistaPrevia(citas, cfg, preferidas) {
+    var real = (preferidas || []).filter(function (c) { return c.lista; })[0] || citas.filter(function (c) { return c.lista; })[0];
+    var cita, quien;
+    if (real) {
+      cita = real; quien = 'Vista previa con ' + (real.nombre || 'la primera cita') + ':';
+    } else {
+      var manana = RC.sumarDias(cfg.hoy, 1);
+      cita = RC.construirCitas([{ nombre: 'Laura García', telefono: '600000001', fecha: manana, hora: '10:30', servicio: 'Corte y peinado', personas: '2' }],
+        { pais: 'ES', hoy: cfg.hoy })[0];
+      quien = 'Vista previa con datos de ejemplo:';
+    }
+    var vista = $('vista');
+    $('vista-titulo').textContent = quien;
+    if (RC.problemasPlantilla(cfg.plantilla, { negocio: 'x' }).bloqueantes.length) {
+      vista.textContent = 'Corrige el mensaje para ver la vista previa.';
+      return;
+    }
+    vista.textContent = RC.mensajeDe(cita, { negocio: cfg.negocio || '(nombre de tu negocio)', plantilla: cfg.plantilla, hoy: cfg.hoy });
+  }
+
+  function pintarAvisosMensaje(problemas) {
+    var cont = $('avisos-mensaje');
+    vaciar(cont);
+    problemas.bloqueantes.forEach(function (t) { cont.appendChild(nota('error', t)); });
+    problemas.avisos.forEach(function (t) { cont.appendChild(nota('aviso', t)); });
+  }
+
+  function tarjeta(c, ctx) {
+    var enviable = c.lista && !ctx.bloqueado && !ctx.esEjemplo(c);
+    var msg = c.lista ? RC.mensajeDe(c, ctx.cfg) : '';
+    var enlace = enviable ? RC.enlaceWhatsApp(c.telefono.digitos, msg) : null;
+
+    var titulo = el('span', { class: 'nombre', text: c.nombre || 'Sin nombre' });
+    if (ctx.esEjemplo(c)) titulo.appendChild(el('span', { class: 'etiq ejemplo', text: 'Ejemplo' }));
+    var marcaAbierta = el('span', { class: 'etiq abierta', text: 'Abierto', hidden: !estado.abiertos[c.id] });
+    titulo.appendChild(marcaAbierta);
+
+    var cuando = c.hora.ok ? c.hora.texto : '¿hora?';
+    var datos = [
+      c.telefono.ok ? c.telefono.visible : (c.crudo.telefono || 'sin teléfono'),
+      c.fecha.ok ? RC.formatoFecha(c.fecha.iso, ctx.cfg.hoy) : (c.crudo.fecha || 'sin fecha'),
+      c.origen === 'manual' ? 'añadida a mano' : (c.linea ? 'línea ' + c.linea : ''),
+      c.servicio
+    ].filter(Boolean).join(' · ');
+
+    var tieneError = c.problemas.some(function (p) { return p.nivel === 'error'; });
+    var art = el('li', { class: 'cita' + (tieneError ? ' problema' : '') + (estado.abiertos[c.id] ? ' abierta' : '') });
+    art.appendChild(el('div', { class: 'cab' }, [titulo, el('span', { class: 'hora', text: cuando })]));
+    art.appendChild(el('div', { class: 'datos', text: datos }));
+
+    if (c.problemas.length) {
+      art.appendChild(el('ul', { class: 'problemas' }, c.problemas.map(function (p) {
+        return el('li', { class: p.nivel === 'error' ? 'e' : 'a', text: (p.nivel === 'error' ? 'Error: ' : 'Aviso: ') + p.texto });
+      })));
+    }
+    if (c.lista) {
+      art.appendChild(el('details', {}, [el('summary', { text: 'Ver mensaje' }), el('pre', { text: msg })]));
+    }
+
+    var acciones = el('div', { class: 'acciones' });
+    if (enlace) {
+      var a = el('a', { class: 'btn primario', href: enlace, target: '_blank', rel: 'noopener noreferrer', text: estado.abiertos[c.id] ? 'Abrir de nuevo' : 'Abrir WhatsApp' });
+      a.addEventListener('click', function () {
+        estado.abiertos[c.id] = true;
+        art.classList.add('abierta');
+        marcaAbierta.hidden = false;
+        a.textContent = 'Abrir de nuevo';
+        pintarResumen();
+      });
+      acciones.appendChild(a);
+    } else {
+      var motivo = ctx.esEjemplo(c) ? 'Ejemplo: sin envío' : 'Abrir WhatsApp';
+      acciones.appendChild(el('button', { type: 'button', class: 'btn primario', disabled: true, text: motivo }));
+    }
+    if (c.lista && !ctx.bloqueado) {
+      var b = el('button', { type: 'button', class: 'btn', text: 'Copiar mensaje' });
+      b.addEventListener('click', function () { copiar(msg, b); });
+      acciones.appendChild(b);
+    }
+    if (c.origen === 'manual') {
+      acciones.appendChild(el('button', {
+        type: 'button', class: 'btn', text: 'Quitar',
+        onclick: function () { estado.manual.splice(c.manualIdx, 1); render(); }
+      }));
+    }
+    art.appendChild(acciones);
+    return art;
+  }
+
+  function pintarResumen() {
+    var u = estado.ultima;
+    var r = $('resumen');
+    if (!u) { r.textContent = ''; return; }
+    var v = u.visibles;
+    if (!v.length) { r.textContent = ''; return; }
+    var listas = v.filter(function (c) { return c.lista; }).length;
+    var abiertas = v.filter(function (c) { return estado.abiertos[c.id]; }).length;
+    var problemas = v.length - listas;
+    r.textContent = v.length + (v.length === 1 ? ' cita' : ' citas') + ' · ' + listas + ' listas para enviar' +
+      (problemas ? ' · ' + problemas + ' con errores' : '') + ' · ' + abiertas + ' abiertas';
+  }
+
+  var pendiente = null;
+  // Escribir o pegar puede disparar muchos eventos seguidos: se juntan en un único repintado.
+  function programar() {
+    if (pendiente !== null) return;
+    pendiente = setTimeout(function () { pendiente = null; guardarConfig(); render(); }, 0);
+  }
+
+  function render() {
+    if (pendiente !== null) { clearTimeout(pendiente); pendiente = null; guardarConfig(); }
+    var cfg = configActual();
+    var opc = { pais: $('pais').value, prefijo: $('prefijo').value, hoy: cfg.hoy };
+
+    var agenda = RC.leerAgenda($('pegado').value);
+    var filas = agenda.filas.map(function (f) { f._origen = 'pegado'; return f; })
+      .concat(estado.manual.map(function (m, i) {
+        return { nombre: m.nombre, telefono: m.telefono, fecha: m.fecha, hora: m.hora, servicio: m.servicio, personas: m.personas, _origen: 'manual', _manualIdx: i };
+      }));
+    var citas = RC.construirCitas(filas, opc);
+    var problemas = RC.problemasPlantilla(cfg.plantilla, cfg);
+
+    pintarAvisosMensaje(problemas);
+
+    // Avisos de la carga
+    var carga = $('avisos-carga');
+    vaciar(carga);
+    if (agenda.error) carga.appendChild(nota('error', agenda.error));
+    agenda.avisos.forEach(function (t) { carga.appendChild(nota('aviso', t)); });
+    RC.diagnostico(agenda, citas).forEach(function (t) { carga.appendChild(nota('aviso', t)); });
+
+    // Filtro por día
+    var dia = $('dia').value;
+    var todas = $('todas').checked;
+    $('dia').disabled = todas;
+    var f = RC.filtrarPorFecha(citas, todas ? '' : dia);
+    estado.ultima = { visibles: f.visibles };
+    pintarVistaPrevia(citas, cfg, f.visibles);
+
+    var avisos = $('avisos');
+    vaciar(avisos);
+    var esEjemplo = function (c) { return c.telefono.ok && RC.esNumeroDeEjemplo(c.telefono.digitos); };
+    if (f.visibles.some(esEjemplo)) {
+      avisos.appendChild(nota('aviso', 'Hay citas de ejemplo con teléfonos ficticios: no se pueden enviar. Pega tu agenda o pulsa «Vaciar todo».'));
+    }
+    if (problemas.bloqueantes.length) {
+      avisos.appendChild(nota('error', 'El envío está bloqueado hasta que corrijas los avisos en rojo de los pasos 1 y 2.'));
+    }
+    if (f.ocultas && f.visibles.length) {
+      avisos.appendChild(nota('info', 'Hay ' + f.ocultas + (f.ocultas === 1 ? ' cita' : ' citas') + ' de otras fechas. Marca «Ver todas las fechas» para verlas.'));
+    }
+
+    var cont = $('lista-contenedor');
+    vaciar(cont);
+    pintarResumen();
+
+    if (!f.visibles.length) {
+      var vacio = el('div', { class: 'vacio' });
+      if (!citas.length) {
+        vacio.appendChild(el('p', { text: 'Aún no hay citas. Pega tu agenda en el paso 3, carga un archivo o añade una cita a mano.' }));
+      } else {
+        vacio.appendChild(el('p', { text: 'No hay citas para el ' + (RC.parsearFecha(dia, cfg.hoy).ok ? RC.formatoFecha(dia, cfg.hoy) : 'día elegido') + '. Hay citas en estas fechas:' }));
+        var chips = el('div', { class: 'fechas' });
+        RC.fechasEncontradas(citas).slice(0, 8).forEach(function (x) {
+          chips.appendChild(el('button', {
+            type: 'button', class: 'btn chico',
+            text: RC.formatoFecha(x.iso, cfg.hoy) + ' (' + x.n + ')',
+            onclick: function () { $('dia').value = x.iso; $('todas').checked = false; render(); }
+          }));
+        });
+        vacio.appendChild(chips);
+      }
+      cont.appendChild(vacio);
+      return;
+    }
+
+    var ctx = { cfg: cfg, bloqueado: problemas.bloqueantes.length > 0, esEjemplo: esEjemplo };
+    var lista = null, ultimoGrupo = null;
+    f.visibles.forEach(function (c) {
+      var grupo = c.fecha.ok ? RC.formatoFecha(c.fecha.iso, cfg.hoy) : 'Sin fecha válida';
+      if ((todas || !dia) && grupo !== ultimoGrupo) {
+        cont.appendChild(el('h3', { class: 'grupo', text: grupo }));
+        lista = null;
+      }
+      ultimoGrupo = grupo;
+      if (!lista) { lista = el('ul', { class: 'lista' }); cont.appendChild(lista); }
+      lista.appendChild(tarjeta(c, ctx));
+    });
+  }
+
+  /* ---------------------------------------------------------- acciones */
+  function elegirModelo() {
+    var v = $('plantilla').value;
+    if (tiene(RC.PLANTILLAS, v)) $('mensaje').value = RC.PLANTILLAS[v].texto;
+    guardarConfig();
+    render();
+  }
+
+  function editarMensaje(inmediato) {
+    var t = $('mensaje').value, coincide = 'personalizada';
+    Object.keys(RC.PLANTILLAS).forEach(function (k) { if (RC.PLANTILLAS[k].texto === t) coincide = k; });
+    $('plantilla').value = coincide;
+    if (inmediato === true) { guardarConfig(); render(); } else { programar(); }
+  }
+
+  function insertarCampo(campo) {
+    var ta = $('mensaje');
+    var ini = ta.selectionStart, fin = ta.selectionEnd;
+    if (typeof ini !== 'number') { ini = fin = ta.value.length; }
+    var ins = '{' + campo + '}';
+    ta.value = ta.value.slice(0, ini) + ins + ta.value.slice(fin);
+    ta.focus();
+    ta.setSelectionRange(ini + ins.length, ini + ins.length);
+    editarMensaje(true);
+  }
+
+  function diaPorDefecto() { return RC.sumarDias(RC.hoyISO(new Date()), 1); }
+
+  function cargarEjemplo() {
+    var iso = RC.parsearFecha($('dia').value, RC.hoyISO(new Date())).ok ? $('dia').value : diaPorDefecto();
+    var tipo = $('plantilla').value === 'reserva' ? 'reserva' : 'cita';
+    var t = RC.ejemploAgenda(iso, $('pais').value, tipo);
+    $('pegado').value = t;
+    $('dia').value = iso;
+    $('todas').checked = false;
+    render();
+  }
+
+  function vaciarTodo() {
+    $('pegado').value = '';
+    estado.manual = [];
+    estado.abiertos = {};
+    vaciar($('avisos-manual'));
+    render();
+  }
+
+  function descargarPlantilla() {
+    var blob = new Blob([RC.plantillaCSV()], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = el('a', { href: url, download: 'plantilla-citas.csv' });
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+  }
+
+  function cargarArchivo(archivo) {
+    var cont = $('avisos-carga');
+    if (!archivo) return;
+    if (archivo.size > MAX_ARCHIVO) { vaciar(cont); cont.appendChild(nota('error', 'El archivo es demasiado grande (máximo 2 MB).')); return; }
+    var lector = new FileReader();
+    lector.onerror = function () { vaciar(cont); cont.appendChild(nota('error', 'No se pudo leer el archivo.')); };
+    lector.onload = function () {
+      var bytes = new Uint8Array(lector.result);
+      if (RC.esExcel(bytes)) {
+        vaciar(cont);
+        cont.appendChild(nota('error', 'Ese archivo es un libro de Excel (.xlsx/.xls). Ábrelo, selecciona las celdas de la agenda, cópialas y pégalas en el cuadro; o usa «Guardar como… CSV».'));
+        return;
+      }
+      $('pegado').value = RC.decodificarTexto(bytes);
+      render();
+    };
+    lector.readAsArrayBuffer(archivo);
+  }
+
+  function anadirManual() {
+    var av = $('avisos-manual');
+    vaciar(av);
+    var m = {
+      nombre: $('m-nombre').value, telefono: $('m-tel').value, fecha: $('m-fecha').value, hora: $('m-hora').value,
+      servicio: $('m-servicio').value, personas: $('m-personas').value
+    };
+    var faltan = [];
+    if (!m.telefono.trim()) faltan.push('el teléfono');
+    if (!m.fecha.trim()) faltan.push('la fecha');
+    if (!m.hora.trim()) faltan.push('la hora');
+    if (faltan.length) { av.appendChild(nota('error', 'Falta ' + faltan.join(', ') + '.')); return; }
+    estado.manual.push(m);
+    ['m-nombre', 'm-tel', 'm-servicio', 'm-personas'].forEach(function (id) { $(id).value = ''; });
+    $('dia').value = RC.parsearFecha(m.fecha, RC.hoyISO(new Date())).ok ? RC.parsearFecha(m.fecha, RC.hoyISO(new Date())).iso : $('dia').value;
+    $('todas').checked = false;
+    av.appendChild(nota('info', 'Cita añadida. Puedes seguir con la siguiente.'));
+    render();
+    $('m-nombre').focus();
+  }
+
+  /* -------------------------------------------------------------- inicio */
+  function iniciar() {
+    var c = leerConfig();
+    if (typeof c.negocio === 'string') $('negocio').value = c.negocio.slice(0, 80);
+    if (c.pais === 'ES' || c.pais === 'UY' || c.pais === 'OTRO') $('pais').value = c.pais;
+    if (typeof c.prefijo === 'string') $('prefijo').value = c.prefijo.replace(/\D/g, '').slice(0, 4);
+    $('mensaje').value = typeof c.mensaje === 'string' && c.mensaje.trim() ? c.mensaje.slice(0, 2000) : RC.PLANTILLAS.cita.texto;
+    var t = $('mensaje').value, modelo = 'personalizada';
+    Object.keys(RC.PLANTILLAS).forEach(function (k) { if (RC.PLANTILLAS[k].texto === t) modelo = k; });
+    $('plantilla').value = modelo;
+    $('dia').value = diaPorDefecto();
+    $('m-fecha').value = diaPorDefecto();
+    $('campo-prefijo').hidden = $('pais').value !== 'OTRO';
+
+    var chips = document.querySelector('.chips');
+    RC.CAMPOS.forEach(function (campo) {
+      chips.appendChild(el('button', { type: 'button', class: 'btn chico', text: '{' + campo + '}', onclick: function () { insertarCampo(campo); } }));
+    });
+
+    ['negocio', 'prefijo'].forEach(function (id) { $(id).addEventListener('input', programar); });
+    $('pais').addEventListener('change', function () { $('campo-prefijo').hidden = $('pais').value !== 'OTRO'; guardarConfig(); render(); });
+    $('plantilla').addEventListener('change', elegirModelo);
+    $('mensaje').addEventListener('input', editarMensaje);
+    $('pegado').addEventListener('input', programar);
+    $('dia').addEventListener('input', programar);
+    $('dia').addEventListener('change', render);
+    $('todas').addEventListener('change', render);
+    $('btn-ejemplo').addEventListener('click', cargarEjemplo);
+    $('btn-plantilla').addEventListener('click', descargarPlantilla);
+    $('btn-vaciar').addEventListener('click', vaciarTodo);
+    $('btn-anadir').addEventListener('click', anadirManual);
+    $('archivo').addEventListener('change', function () { cargarArchivo(this.files && this.files[0]); this.value = ''; });
+    render();
+  }
+
+  iniciar();
+})();
+</script>
+</body>
+</html>
