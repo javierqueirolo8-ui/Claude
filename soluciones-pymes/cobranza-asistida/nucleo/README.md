@@ -5,6 +5,9 @@ servicio está escrito como funciones **puras** y probado por completo; con él 
 flujo diario y unas utilidades de prueba), con datos **100 % ficticios**, **nada activo ni publicado**, sin credenciales y sin enviar nada a nadie.
 Verificados contra el simulador en 54 pasos; falta correr en n8n la serie de roturas de infraestructura a propósito (ver [Los flujos de n8n](#los-flujos-de-n8n-etapa-2)).
 
+**Documentación del código:** la [guía del código](doc/GUIA-DEL-CODIGO.md) (reglas, cómo viajan los datos, recetas de cambio, pruebas y una
+evaluación honesta de la calidad) y la [referencia](doc/REFERENCIA.md) de cada módulo y función, generada desde `src/` y verificada por una prueba.
+
 ## Qué es y qué no es
 
 - **Es** el cerebro del servicio: lee la exportación de facturas de un cliente, aparta lo dudoso con un código, calcula la

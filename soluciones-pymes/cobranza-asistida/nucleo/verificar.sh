@@ -37,10 +37,10 @@ for arg in "$@"; do
 done
 
 echo "▸ Sintaxis"
-for f in src/*.js tests/*.js datos-ficticios/*.js demo/*.js n8n/*.js mutaciones.js; do
+for f in src/*.js tests/*.js datos-ficticios/*.js demo/*.js n8n/*.js doc/*.js mutaciones.js; do
   node --check "$f" || { echo "✗ error de sintaxis en $f"; exit 1; }
 done
-echo "  ✓ $(ls src/*.js tests/*.js datos-ficticios/*.js demo/*.js n8n/*.js mutaciones.js | wc -l | tr -d ' ') archivos"
+echo "  ✓ $(ls src/*.js tests/*.js datos-ficticios/*.js demo/*.js n8n/*.js doc/*.js mutaciones.js | wc -l | tr -d ' ') archivos"
 
 echo
 echo "▸ Demostración y ejemplos al día con el código"
